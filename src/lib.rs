@@ -6,7 +6,6 @@
 
 extern crate alloc;
 
-pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
@@ -16,6 +15,9 @@ pub mod wasm;
 
 use core::panic::PanicInfo;
 use x86_64::instructions::port::Port;
+
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub fn init() {
 	gdt::init();
