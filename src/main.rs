@@ -5,6 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 
 extern crate alloc;
+extern crate alloc as std;
 
 use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
@@ -13,6 +14,7 @@ use jitos::{
 	allocator,
 	memory::{self, BootInfoFrameAllocator},
 	println,
+	wasm::test_wasm,
 };
 use x86_64::VirtAddr;
 
@@ -45,6 +47,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 	println!("current reference count is {}", Rc::strong_count(&cloned_reference));
 	core::mem::drop(reference_counted);
 	println!("reference count is {} now", Rc::strong_count(&cloned_reference));
+
+	test_wasm();
 
 	#[cfg(test)]
 	test_main();
