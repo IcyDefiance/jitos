@@ -1,10 +1,3 @@
-//! "Jitos" implementations of `ModuleEnvironment` and `FuncEnvironment` for testing
-//! wasm translation. For complete implementations of `ModuleEnvironment` and
-//! `FuncEnvironment`, see [wasmtime-environ] in [Wasmtime].
-//!
-//! [wasmtime-environ]: https://crates.io/crates/wasmtime-environ
-//! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
-
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::convert::TryFrom;
 use cranelift_codegen::{
@@ -15,7 +8,7 @@ use cranelift_codegen::{
 		types::*,
 		InstBuilder,
 	},
-	isa::TargetFrontendConfig,
+	isa::{CallConv, TargetFrontendConfig},
 };
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_wasm::{
@@ -23,6 +16,10 @@ use cranelift_wasm::{
 	MemoryIndex, ModuleEnvironment, ModuleTranslationState, PassiveDataIndex, PassiveElemIndex, ReturnMode,
 	SignatureIndex, Table, TableIndex, TargetEnvironment, WasmResult,
 };
+use target_lexicon::PointerWidth;
+
+const TARGET_CONFIG: TargetFrontendConfig =
+	TargetFrontendConfig { default_call_conv: CallConv::Fast, pointer_width: PointerWidth::U64 };
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -37,59 +34,40 @@ pub struct Exportable<T> {
 	/// Names under which the entity is exported.
 	pub export_names: Vec<String>,
 }
-
 impl<T> Exportable<T> {
 	pub fn new(entity: T) -> Self {
 		Self { entity, export_names: Vec::new() }
 	}
 }
 
-/// The main state belonging to a `JitosEnvironment`. This is split out from
-/// `JitosEnvironment` to allow it to be borrowed separately from the
-/// `FuncTranslator` field.
 pub struct JitosModuleInfo {
-	/// Target description relevant to frontends producing Cranelift IR.
-	config: TargetFrontendConfig,
-
 	/// Signatures as provided by `declare_signature`.
 	pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
-
 	/// Module and field names of imported functions as provided by `declare_func_import`.
 	pub imported_funcs: Vec<(String, String)>,
-
 	/// Module and field names of imported globals as provided by `declare_global_import`.
 	pub imported_globals: Vec<(String, String)>,
-
 	/// Module and field names of imported tables as provided by `declare_table_import`.
 	pub imported_tables: Vec<(String, String)>,
-
 	/// Module and field names of imported memories as provided by `declare_memory_import`.
 	pub imported_memories: Vec<(String, String)>,
-
 	/// Functions, imported and local.
 	pub functions: PrimaryMap<FuncIndex, Exportable<SignatureIndex>>,
-
 	/// Function bodies.
 	pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
-
 	/// Tables as provided by `declare_table`.
 	pub tables: PrimaryMap<TableIndex, Exportable<Table>>,
-
 	/// Memories as provided by `declare_memory`.
 	pub memories: PrimaryMap<MemoryIndex, Exportable<Memory>>,
-
 	/// Globals as provided by `declare_global`.
 	pub globals: PrimaryMap<GlobalIndex, Exportable<Global>>,
-
 	/// The start function.
 	pub start_func: Option<FuncIndex>,
 }
-
 impl JitosModuleInfo {
 	/// Creates a new `JitosModuleInfo` instance.
-	pub fn new(config: TargetFrontendConfig) -> Self {
+	pub fn new() -> Self {
 		Self {
-			config,
 			signatures: PrimaryMap::new(),
 			imported_funcs: Vec::new(),
 			imported_globals: Vec::new(),
@@ -105,37 +83,25 @@ impl JitosModuleInfo {
 	}
 }
 
-/// This `ModuleEnvironment` implementation is a "naïve" one, doing essentially nothing and
-/// emitting placeholders when forced to. Don't try to execute code translated for this
-/// environment, essentially here for translation debug purposes.
 pub struct JitosEnvironment {
 	/// Module information.
 	pub info: JitosModuleInfo,
-
 	/// Function translation.
 	trans: FuncTranslator,
-
 	/// Vector of wasm bytecode size for each function.
 	pub func_bytecode_sizes: Vec<usize>,
-
-	/// How to return from functions.
-	return_mode: ReturnMode,
-
 	/// Instructs to collect debug data during translation.
 	debug_info: bool,
-
 	/// Function names.
 	function_names: SecondaryMap<FuncIndex, String>,
 }
-
 impl JitosEnvironment {
 	/// Creates a new `JitosEnvironment` instance.
-	pub fn new(config: TargetFrontendConfig, return_mode: ReturnMode, debug_info: bool) -> Self {
+	pub fn new(debug_info: bool) -> Self {
 		Self {
-			info: JitosModuleInfo::new(config),
+			info: JitosModuleInfo::new(),
 			trans: FuncTranslator::new(),
 			func_bytecode_sizes: Vec::new(),
-			return_mode,
 			debug_info,
 			function_names: SecondaryMap::new(),
 		}
@@ -144,7 +110,7 @@ impl JitosEnvironment {
 	/// Return a `JitosFuncEnvironment` for translating functions within this
 	/// `JitosEnvironment`.
 	pub fn func_env(&self) -> JitosFuncEnvironment {
-		JitosFuncEnvironment::new(&self.info, self.return_mode)
+		JitosFuncEnvironment::new(&self.info)
 	}
 
 	fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
@@ -162,17 +128,167 @@ impl JitosEnvironment {
 		self.function_names.get(func_index).map(String::as_ref)
 	}
 }
+impl TargetEnvironment for JitosEnvironment {
+	fn target_config(&self) -> TargetFrontendConfig {
+		TARGET_CONFIG
+	}
+}
+impl<'data> ModuleEnvironment<'data> for JitosEnvironment {
+	fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
+		self.info.signatures.push(sig);
+		Ok(())
+	}
+
+	fn declare_func_import(
+		&mut self,
+		sig_index: SignatureIndex,
+		module: &'data str,
+		field: &'data str,
+	) -> WasmResult<()> {
+		assert_eq!(
+			self.info.functions.len(),
+			self.info.imported_funcs.len(),
+			"Imported functions must be declared first"
+		);
+		self.info.functions.push(Exportable::new(sig_index));
+		self.info.imported_funcs.push((String::from(module), String::from(field)));
+		Ok(())
+	}
+
+	fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
+		self.info.functions.push(Exportable::new(sig_index));
+		Ok(())
+	}
+
+	fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+		self.info.globals.push(Exportable::new(global));
+		Ok(())
+	}
+
+	fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str) -> WasmResult<()> {
+		self.info.globals.push(Exportable::new(global));
+		self.info.imported_globals.push((String::from(module), String::from(field)));
+		Ok(())
+	}
+
+	fn declare_table(&mut self, table: Table) -> WasmResult<()> {
+		self.info.tables.push(Exportable::new(table));
+		Ok(())
+	}
+
+	fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str) -> WasmResult<()> {
+		self.info.tables.push(Exportable::new(table));
+		self.info.imported_tables.push((String::from(module), String::from(field)));
+		Ok(())
+	}
+
+	fn declare_table_elements(
+		&mut self,
+		_table_index: TableIndex,
+		_base: Option<GlobalIndex>,
+		_offset: usize,
+		_elements: Box<[FuncIndex]>,
+	) -> WasmResult<()> {
+		// We do nothing
+		Ok(())
+	}
+
+	fn declare_passive_element(
+		&mut self,
+		_elem_index: PassiveElemIndex,
+		_segments: Box<[FuncIndex]>,
+	) -> WasmResult<()> {
+		Ok(())
+	}
+
+	fn declare_passive_data(&mut self, _elem_index: PassiveDataIndex, _segments: &'data [u8]) -> WasmResult<()> {
+		Ok(())
+	}
+
+	fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
+		self.info.memories.push(Exportable::new(memory));
+		Ok(())
+	}
+
+	fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str) -> WasmResult<()> {
+		self.info.memories.push(Exportable::new(memory));
+		self.info.imported_memories.push((String::from(module), String::from(field)));
+		Ok(())
+	}
+
+	fn declare_data_initialization(
+		&mut self,
+		_memory_index: MemoryIndex,
+		_base: Option<GlobalIndex>,
+		_offset: usize,
+		_data: &'data [u8],
+	) -> WasmResult<()> {
+		// We do nothing
+		Ok(())
+	}
+
+	fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+		self.info.functions[func_index].export_names.push(String::from(name));
+		Ok(())
+	}
+
+	fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) -> WasmResult<()> {
+		self.info.tables[table_index].export_names.push(String::from(name));
+		Ok(())
+	}
+
+	fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) -> WasmResult<()> {
+		self.info.memories[memory_index].export_names.push(String::from(name));
+		Ok(())
+	}
+
+	fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) -> WasmResult<()> {
+		self.info.globals[global_index].export_names.push(String::from(name));
+		Ok(())
+	}
+
+	fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
+		debug_assert!(self.info.start_func.is_none());
+		self.info.start_func = Some(func_index);
+		Ok(())
+	}
+
+	fn define_function_body(
+		&mut self,
+		module_translation_state: &ModuleTranslationState,
+		body_bytes: &'data [u8],
+		body_offset: usize,
+	) -> WasmResult<()> {
+		let func = {
+			let mut func_environ = JitosFuncEnvironment::new(&self.info);
+			let func_index = FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
+			let name = get_func_name(func_index);
+			let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
+			let mut func = ir::Function::with_name_signature(name, sig);
+			if self.debug_info {
+				func.collect_debug_info();
+			}
+			self.trans.translate(module_translation_state, body_bytes, body_offset, &mut func, &mut func_environ)?;
+			func
+		};
+		self.func_bytecode_sizes.push(body_bytes.len());
+		self.info.function_bodies.push(func);
+		Ok(())
+	}
+
+	fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+		self.function_names[func_index] = String::from(name);
+		Ok(())
+	}
+}
 
 /// The `FuncEnvironment` implementation for use by the `JitosEnvironment`.
 pub struct JitosFuncEnvironment<'dummy_environment> {
 	pub mod_info: &'dummy_environment JitosModuleInfo,
-
-	return_mode: ReturnMode,
 }
-
 impl<'dummy_environment> JitosFuncEnvironment<'dummy_environment> {
-	pub fn new(mod_info: &'dummy_environment JitosModuleInfo, return_mode: ReturnMode) -> Self {
-		Self { mod_info, return_mode }
+	pub fn new(mod_info: &'dummy_environment JitosModuleInfo) -> Self {
+		Self { mod_info }
 	}
 
 	// Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
@@ -183,16 +299,14 @@ impl<'dummy_environment> JitosFuncEnvironment<'dummy_environment> {
 		sig
 	}
 }
-
 impl<'dummy_environment> TargetEnvironment for JitosFuncEnvironment<'dummy_environment> {
 	fn target_config(&self) -> TargetFrontendConfig {
-		self.mod_info.config
+		TARGET_CONFIG
 	}
 }
-
 impl<'dummy_environment> FuncEnvironment for JitosFuncEnvironment<'dummy_environment> {
 	fn return_mode(&self) -> ReturnMode {
-		self.return_mode
+		ReturnMode::NormalReturns
 	}
 
 	fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> WasmResult<GlobalVariable> {
@@ -474,161 +588,6 @@ impl<'dummy_environment> FuncEnvironment for JitosFuncEnvironment<'dummy_environ
 		_global_index: GlobalIndex,
 		_val: ir::Value,
 	) -> WasmResult<()> {
-		Ok(())
-	}
-}
-
-impl TargetEnvironment for JitosEnvironment {
-	fn target_config(&self) -> TargetFrontendConfig {
-		self.info.config
-	}
-}
-
-impl<'data> ModuleEnvironment<'data> for JitosEnvironment {
-	fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
-		self.info.signatures.push(sig);
-		Ok(())
-	}
-
-	fn declare_func_import(
-		&mut self,
-		sig_index: SignatureIndex,
-		module: &'data str,
-		field: &'data str,
-	) -> WasmResult<()> {
-		assert_eq!(
-			self.info.functions.len(),
-			self.info.imported_funcs.len(),
-			"Imported functions must be declared first"
-		);
-		self.info.functions.push(Exportable::new(sig_index));
-		self.info.imported_funcs.push((String::from(module), String::from(field)));
-		Ok(())
-	}
-
-	fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
-		self.info.functions.push(Exportable::new(sig_index));
-		Ok(())
-	}
-
-	fn declare_global(&mut self, global: Global) -> WasmResult<()> {
-		self.info.globals.push(Exportable::new(global));
-		Ok(())
-	}
-
-	fn declare_global_import(&mut self, global: Global, module: &'data str, field: &'data str) -> WasmResult<()> {
-		self.info.globals.push(Exportable::new(global));
-		self.info.imported_globals.push((String::from(module), String::from(field)));
-		Ok(())
-	}
-
-	fn declare_table(&mut self, table: Table) -> WasmResult<()> {
-		self.info.tables.push(Exportable::new(table));
-		Ok(())
-	}
-
-	fn declare_table_import(&mut self, table: Table, module: &'data str, field: &'data str) -> WasmResult<()> {
-		self.info.tables.push(Exportable::new(table));
-		self.info.imported_tables.push((String::from(module), String::from(field)));
-		Ok(())
-	}
-
-	fn declare_table_elements(
-		&mut self,
-		_table_index: TableIndex,
-		_base: Option<GlobalIndex>,
-		_offset: usize,
-		_elements: Box<[FuncIndex]>,
-	) -> WasmResult<()> {
-		// We do nothing
-		Ok(())
-	}
-
-	fn declare_passive_element(
-		&mut self,
-		_elem_index: PassiveElemIndex,
-		_segments: Box<[FuncIndex]>,
-	) -> WasmResult<()> {
-		Ok(())
-	}
-
-	fn declare_passive_data(&mut self, _elem_index: PassiveDataIndex, _segments: &'data [u8]) -> WasmResult<()> {
-		Ok(())
-	}
-
-	fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
-		self.info.memories.push(Exportable::new(memory));
-		Ok(())
-	}
-
-	fn declare_memory_import(&mut self, memory: Memory, module: &'data str, field: &'data str) -> WasmResult<()> {
-		self.info.memories.push(Exportable::new(memory));
-		self.info.imported_memories.push((String::from(module), String::from(field)));
-		Ok(())
-	}
-
-	fn declare_data_initialization(
-		&mut self,
-		_memory_index: MemoryIndex,
-		_base: Option<GlobalIndex>,
-		_offset: usize,
-		_data: &'data [u8],
-	) -> WasmResult<()> {
-		// We do nothing
-		Ok(())
-	}
-
-	fn declare_func_export(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
-		self.info.functions[func_index].export_names.push(String::from(name));
-		Ok(())
-	}
-
-	fn declare_table_export(&mut self, table_index: TableIndex, name: &'data str) -> WasmResult<()> {
-		self.info.tables[table_index].export_names.push(String::from(name));
-		Ok(())
-	}
-
-	fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &'data str) -> WasmResult<()> {
-		self.info.memories[memory_index].export_names.push(String::from(name));
-		Ok(())
-	}
-
-	fn declare_global_export(&mut self, global_index: GlobalIndex, name: &'data str) -> WasmResult<()> {
-		self.info.globals[global_index].export_names.push(String::from(name));
-		Ok(())
-	}
-
-	fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
-		debug_assert!(self.info.start_func.is_none());
-		self.info.start_func = Some(func_index);
-		Ok(())
-	}
-
-	fn define_function_body(
-		&mut self,
-		module_translation_state: &ModuleTranslationState,
-		body_bytes: &'data [u8],
-		body_offset: usize,
-	) -> WasmResult<()> {
-		let func = {
-			let mut func_environ = JitosFuncEnvironment::new(&self.info, self.return_mode);
-			let func_index = FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
-			let name = get_func_name(func_index);
-			let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
-			let mut func = ir::Function::with_name_signature(name, sig);
-			if self.debug_info {
-				func.collect_debug_info();
-			}
-			self.trans.translate(module_translation_state, body_bytes, body_offset, &mut func, &mut func_environ)?;
-			func
-		};
-		self.func_bytecode_sizes.push(body_bytes.len());
-		self.info.function_bodies.push(func);
-		Ok(())
-	}
-
-	fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
-		self.function_names[func_index] = String::from(name);
 		Ok(())
 	}
 }

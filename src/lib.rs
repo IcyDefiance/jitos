@@ -4,6 +4,7 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#[macro_use]
 extern crate alloc;
 
 pub mod gdt;

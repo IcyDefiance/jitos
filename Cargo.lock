@@ -328,6 +328,7 @@ checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
 [[package]]
 name = "thiserror"
 version = "1.0.11"
+source = "git+https://github.com/IcyDefiance/thiserror#3c67f09db91c687006555eaf8c30695c9264016a"
 dependencies = [
  "thiserror-impl",
 ]
@@ -335,6 +336,7 @@ dependencies = [
 [[package]]
 name = "thiserror-impl"
 version = "1.0.11"
+source = "git+https://github.com/IcyDefiance/thiserror#3c67f09db91c687006555eaf8c30695c9264016a"
 dependencies = [
  "proc-macro2",
  "quote",
