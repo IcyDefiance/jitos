@@ -6,9 +6,7 @@ edition = "2018"
 
 [dependencies]
 bootloader = { version = "0.8.0", features = ["map_physical_memory"]}
-cranelift-codegen = { path = "../cranelift/cranelift-codegen", default-features = false, features = ["core"] }
-cranelift-entity = { path = "../cranelift/cranelift-entity" }
-cranelift-wasm = { path = "../cranelift/cranelift-wasm", default-features = false, features = ["core"] }
+goblin = { version = "0.2.0", default-features = false, features = ["elf32", "elf64", "endian_fd"] }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 pc-keyboard = "0.3.1"
 pic8259_simple = "0.1.1"
@@ -35,4 +33,4 @@ test-args = [
 test-success-exit-code = 33 # (0x10 << 1) | 1
 
 [workspace]
-members = ["wasm-test"]
+members = ["layer-std", "wasm-test"]

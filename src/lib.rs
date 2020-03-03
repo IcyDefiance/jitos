@@ -1,18 +1,18 @@
 #![no_std]
 #![cfg_attr(test, no_main)]
-#![feature(custom_test_frameworks, abi_x86_interrupt, alloc_error_handler)]
+#![feature(asm, custom_test_frameworks, abi_x86_interrupt, alloc_error_handler)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
 #[macro_use]
 extern crate alloc;
 
+pub mod elf;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod vga_buffer;
-pub mod wasm;
 
 use core::panic::PanicInfo;
 use x86_64::instructions::port::Port;
