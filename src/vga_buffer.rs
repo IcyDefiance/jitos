@@ -13,7 +13,7 @@ lazy_static! {
 	/// Used by the `print!` and `println!` macros.
 	pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
 		colpos: 0,
-		color: VgaColor::new(Color::Yellow, Color::Black),
+		color: VgaColor::new(Color::LightGray, Color::Black),
 		buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
 	});
 }
