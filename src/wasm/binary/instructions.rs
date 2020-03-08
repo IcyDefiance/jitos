@@ -44,6 +44,7 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 		},
 		0x11 => {
 			let (i, x) = typeidx(i)?;
+			let (i, _) = tag(&[0x00])(i)?;
 			(i, Instr::CallIndirect(x))
 		},
 		// *** PARAMETRIC ***

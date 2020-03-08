@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 bootloader = { version = "0.8.0", features = ["map_physical_memory", "sse"] }
+hashbrown = "0.7.0"
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 nom = { version = "5.1.1", default-features = false, features = ["alloc"] }
 pc-keyboard = "0.3.1"

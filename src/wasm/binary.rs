@@ -4,11 +4,9 @@ pub mod modules;
 pub mod types;
 mod values;
 
-use crate::{println, vga_buffer::WRITER};
+use crate::wasm::structure::modules::Module;
 use modules::module;
 
-pub fn decode(bytes: &[u8]) {
-	let module = module(bytes).unwrap().1;
-	module.write_wat(&mut *WRITER.lock()).unwrap();
-	println!("{:?}", module.start);
+pub fn decode(bytes: &[u8]) -> Module {
+	module(bytes).unwrap().1
 }

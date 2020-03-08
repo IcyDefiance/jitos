@@ -3,7 +3,6 @@ use crate::wasm::structure::{
 	types::{ResultType, ValType},
 };
 use alloc::vec::Vec;
-use core::fmt;
 
 #[derive(Debug)]
 pub enum Instr {
@@ -79,175 +78,16 @@ pub enum Instr {
 	I64ExtendI32S,
 	I64ExtendI32U,
 }
-impl Instr {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write, indent: usize) -> fmt::Result {
-		match self {
-			Instr::Unreachable => write!(f, "unreachable")?,
-			Instr::Block(_resulttype, instrs) | Instr::Loop(_resulttype, instrs) => {
-				let op = match self {
-					Instr::Block(..) => "block",
-					Instr::Loop(..) => "loop",
-					_ => unreachable!(),
-				};
-				write!(f, "{} ", op)?;
-				let subindent = indent + 2;
-				for instr in instrs {
-					write!(f, "\n{:indent$}", "", indent = subindent)?;
-					instr.write_wat(f, subindent)?;
-				}
-				write!(f, "\n{:indent$}end", "", indent = indent)?;
-			},
-			Instr::Br(l) | Instr::BrIf(l) => {
-				let op = match self {
-					Instr::Br(_) => "br",
-					Instr::BrIf(_) => "br_if",
-					_ => unreachable!(),
-				};
-				write!(f, "{} ", op)?;
-				l.write_wat(f)?;
-			},
-			Instr::BrTable(ls, ln) => {
-				write!(f, "br_table")?;
-				for l in ls {
-					write!(f, " ")?;
-					l.write_wat(f)?;
-				}
-				write!(f, " ")?;
-				ln.write_wat(f)?;
-			},
-			Instr::Return => write!(f, "return")?,
-			Instr::Call(x) => {
-				write!(f, "call ")?;
-				x.write_wat(f)?;
-			},
-			Instr::CallIndirect(x) => {
-				write!(f, "call_indirect ")?;
-				x.write_wat(f)?;
-			},
-			Instr::Drop => write!(f, "drop")?,
-			Instr::Select => write!(f, "select")?,
-			Instr::LocalGet(x) | Instr::LocalSet(x) | Instr::LocalTee(x) => {
-				let op = match self {
-					Instr::LocalGet(_) => "local.get",
-					Instr::LocalSet(_) => "local.set",
-					Instr::LocalTee(_) => "local.tee",
-					_ => unreachable!(),
-				};
-				write!(f, "{} ", op)?;
-				x.write_wat(f)?;
-			},
-			Instr::GlobalGet(x) | Instr::GlobalSet(x) => {
-				let op = match self {
-					Instr::GlobalGet(_) => "global.get",
-					Instr::GlobalSet(_) => "global.set",
-					_ => unreachable!(),
-				};
-				write!(f, "{} ", op)?;
-				x.write_wat(f)?;
-			},
-			Instr::I32Load(m)
-			| Instr::I64Load(m)
-			| Instr::I32Load8S(m)
-			| Instr::I32Load8U(m)
-			| Instr::I32Load16U(m)
-			| Instr::I64Load8U(m)
-			| Instr::I64Load32U(m)
-			| Instr::I32Store(m)
-			| Instr::I64Store(m)
-			| Instr::I32Store8(m)
-			| Instr::I32Store16(m) => {
-				let op = match self {
-					Instr::I32Load(_) => "i32.load",
-					Instr::I64Load(_) => "i64.load",
-					Instr::I32Load8S(_) => "i32.load8_s",
-					Instr::I32Load8U(_) => "i32.load8_u",
-					Instr::I32Load16U(_) => "i32.load16_u",
-					Instr::I64Load8U(_) => "i64.load8_u",
-					Instr::I64Load32U(_) => "i64.load32_u",
-					Instr::I32Store(_) => "i32.store",
-					Instr::I64Store(_) => "i64.store",
-					Instr::I32Store8(_) => "i32.store8",
-					Instr::I32Store16(_) => "i32.store16",
-					_ => unreachable!(),
-				};
-				write!(f, "{} ", op)?;
-				m.write_wat(f)?;
-			},
-			Instr::MemoryGrow => write!(f, "memory.grow")?,
-			Instr::I32Const(n) => write!(f, "i32.const {}", n)?,
-			Instr::I64Const(n) => write!(f, "i64.const {}", n)?,
-			Instr::I32Eqz => write!(f, "i32.eqz")?,
-			Instr::I32Eq => write!(f, "i32.eq")?,
-			Instr::I32Ne => write!(f, "i32.ne")?,
-			Instr::I32LtS => write!(f, "i32.lt_s")?,
-			Instr::I32LtU => write!(f, "i32.lt_u")?,
-			Instr::I32LeS => write!(f, "i32.le_s")?,
-			Instr::I32LeU => write!(f, "i32.le_u")?,
-			Instr::I32GtS => write!(f, "i32.gt_s")?,
-			Instr::I32GtU => write!(f, "i32.gt_u")?,
-			Instr::I32GeS => write!(f, "i32.ge_s")?,
-			Instr::I32GeU => write!(f, "i32.ge_u")?,
-			Instr::I64Eqz => write!(f, "i64.eqz")?,
-			Instr::I64Eq => write!(f, "i64.eq")?,
-			Instr::I64Ne => write!(f, "i64.ne")?,
-			Instr::I64GtU => write!(f, "i64.gt_u")?,
-			Instr::I64GeU => write!(f, "i64.ge_u")?,
-			Instr::I32Clz => write!(f, "i32.clz")?,
-			Instr::I32Ctz => write!(f, "i32.ctz")?,
-			Instr::I32Add => write!(f, "i32.add")?,
-			Instr::I32Sub => write!(f, "i32.sub")?,
-			Instr::I32Mul => write!(f, "i32.mul")?,
-			Instr::I32DivU => write!(f, "i32.div_u")?,
-			Instr::I32And => write!(f, "i32.and")?,
-			Instr::I32Or => write!(f, "i32.or")?,
-			Instr::I32Xor => write!(f, "i32.xor")?,
-			Instr::I32Shl => write!(f, "i32.shl")?,
-			Instr::I32ShrS => write!(f, "i32.shr_s")?,
-			Instr::I32ShrU => write!(f, "i32.shr_u")?,
-			Instr::I32Rotl => write!(f, "i32.rotl")?,
-			Instr::I64Add => write!(f, "i64.add")?,
-			Instr::I64Sub => write!(f, "i64.sub")?,
-			Instr::I64Mul => write!(f, "i64.mul")?,
-			Instr::I64DivU => write!(f, "i64.div_u")?,
-			Instr::I64And => write!(f, "i64.and")?,
-			Instr::I64Or => write!(f, "i64.or")?,
-			Instr::I64Xor => write!(f, "i64.xor")?,
-			Instr::I64Shl => write!(f, "i64.shl")?,
-			Instr::I64ShrS => write!(f, "i64.shr_s")?,
-			Instr::I32WrapI64 => write!(f, "i32.wrap_i64")?,
-			Instr::I64ExtendI32S => write!(f, "i64.extend_i32_s")?,
-			Instr::I64ExtendI32U => write!(f, "i64.extend_i32_u")?,
-		}
-		Ok(())
-	}
-}
 
 #[derive(Debug)]
 pub struct MemArg {
 	pub align: u32,
 	pub offset: u32,
 }
-impl MemArg {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "align={} offset={}", self.align, self.offset)
-	}
-}
 
 #[derive(Debug)]
 pub struct Expr {
 	pub instrs: Vec<Instr>,
-}
-impl Expr {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write, indent: usize) -> fmt::Result {
-		if self.instrs.len() > 0 {
-			self.instrs[0].write_wat(f, indent)?;
-			for instr in self.instrs.iter().skip(1) {
-				write!(f, "\n{:indent$}", "", indent = indent)?;
-				instr.write_wat(f, indent)?;
-			}
-		}
-		Ok(())
-	}
 }
 
 #[derive(Debug)]

@@ -25,7 +25,7 @@ fn kernel_main(_boot_info: &'static BootInfo) -> ! {
 	#[cfg(test)]
 	test_main();
 
-	// println!("It did not crash!");
+	println!("It did not crash!");
 	jitos::hlt_loop();
 }
 
