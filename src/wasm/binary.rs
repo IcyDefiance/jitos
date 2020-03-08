@@ -1,6 +1,7 @@
-mod instructions;
-mod modules;
-mod types;
+// TODO: make private
+pub mod instructions;
+pub mod modules;
+pub mod types;
 mod values;
 
 use crate::{println, vga_buffer::WRITER};

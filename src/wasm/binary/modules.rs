@@ -1,10 +1,20 @@
-use crate::wasm::decoder::{
-	instructions::{expr, Expr},
-	types::{functype, globaltype, memtype, tabletype, valtype, FuncType, GlobalType, MemType, TableType, ValType},
-	values::{name, u32, vec, vec_byte},
+use crate::wasm::{
+	binary::{
+		instructions::expr,
+		types::{functype, globaltype, memtype, tabletype, valtype},
+		values::{name, u32, vec, vec_byte},
+	},
+	structure::{
+		instructions::Expr,
+		modules::{
+			Data, Elem, Export, ExportDesc, Func, FuncIdx, Global, GlobalIdx, LabelIdx, LocalIdx, Mem, MemIdx, Module,
+			Start, Table, TableIdx, TypeIdx,
+		},
+		types::{FuncType, ValType},
+	},
 };
 use alloc::vec::Vec;
-use core::{fmt, iter::repeat};
+use core::iter::repeat;
 use nom::{
 	bytes::streaming::{tag, take},
 	combinator::{complete, map, opt, rest},
@@ -14,79 +24,30 @@ use nom::{
 	IResult,
 };
 
-#[derive(Debug, Default)]
-pub struct TypeIdx(u32);
-impl TypeIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 pub fn typeidx(i: &[u8]) -> IResult<&[u8], TypeIdx> {
 	map(u32, |idx| TypeIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct FuncIdx(u32);
-impl FuncIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 pub fn funcidx(i: &[u8]) -> IResult<&[u8], FuncIdx> {
 	map(u32, |idx| FuncIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct TableIdx(u32);
-impl TableIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 fn tableidx(i: &[u8]) -> IResult<&[u8], TableIdx> {
 	map(u32, |idx| TableIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct MemIdx(u32);
-impl MemIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 fn memidx(i: &[u8]) -> IResult<&[u8], MemIdx> {
 	map(u32, |idx| MemIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct GlobalIdx(u32);
-impl GlobalIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 pub fn globalidx(i: &[u8]) -> IResult<&[u8], GlobalIdx> {
 	map(u32, |idx| GlobalIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct LocalIdx(u32);
-impl LocalIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 pub fn localidx(i: &[u8]) -> IResult<&[u8], LocalIdx> {
 	map(u32, |idx| LocalIdx(idx))(i)
 }
 
-#[derive(Debug, Default)]
-pub struct LabelIdx(u32);
-impl LabelIdx {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
 pub fn labelidx(i: &[u8]) -> IResult<&[u8], LabelIdx> {
 	map(u32, |idx| LabelIdx(idx))(i)
 }
@@ -146,18 +107,6 @@ fn tablesec(i: &[u8]) -> IResult<&[u8], Vec<Table>> {
 	Ok((i, tables))
 }
 
-#[derive(Debug)]
-pub struct Table {
-	pub typ: TableType,
-}
-impl Table {
-	fn write_wat(&self, f: &mut dyn fmt::Write, idx: usize) -> fmt::Result {
-		write!(f, "(table (;{};) ", idx)?;
-		self.typ.write_wat(f)?;
-		write!(f, ")")
-	}
-}
-
 fn table(i: &[u8]) -> IResult<&[u8], Table> {
 	let (i, typ) = tabletype(i)?;
 	Ok((i, Table { typ }))
@@ -169,18 +118,6 @@ fn memsec(i: &[u8]) -> IResult<&[u8], Vec<Mem>> {
 	Ok((i, mems))
 }
 
-#[derive(Debug)]
-pub struct Mem {
-	pub typ: MemType,
-}
-impl Mem {
-	fn write_wat(&self, f: &mut dyn fmt::Write, idx: usize) -> fmt::Result {
-		write!(f, "(memory (;{};) ", idx)?;
-		self.typ.write_wat(f)?;
-		write!(f, ")")
-	}
-}
-
 fn mem(i: &[u8]) -> IResult<&[u8], Mem> {
 	let (i, typ) = memtype(i)?;
 	Ok((i, Mem { typ }))
@@ -190,21 +127,6 @@ fn globalsec(i: &[u8]) -> IResult<&[u8], Vec<Global>> {
 	let (i, globals) = opt(section(6, vec(global)))(i)?;
 	let globals = globals.unwrap_or(vec![]);
 	Ok((i, globals))
-}
-
-#[derive(Debug)]
-pub struct Global {
-	pub typ: GlobalType,
-	pub init: Expr,
-}
-impl Global {
-	fn write_wat(&self, f: &mut dyn fmt::Write, idx: usize) -> fmt::Result {
-		write!(f, "(global (;{};) (", idx)?;
-		self.typ.write_wat(f)?;
-		write!(f, " ")?;
-		self.init.write_wat(f, 4)?;
-		write!(f, "))")
-	}
 }
 
 fn global(i: &[u8]) -> IResult<&[u8], Global> {
@@ -219,53 +141,10 @@ fn exportsec(i: &[u8]) -> IResult<&[u8], Vec<Export>> {
 	Ok((i, exports))
 }
 
-#[derive(Debug)]
-pub struct Export<'a> {
-	pub name: &'a str,
-	pub desc: ExportDesc,
-}
-impl<'a> Export<'a> {
-	fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		write!(f, "(export \"{}\" (", self.name)?;
-		self.desc.write_wat(f)?;
-		write!(f, "))")
-	}
-}
-
 fn export(i: &[u8]) -> IResult<&[u8], Export> {
 	let (i, name) = name(i)?;
 	let (i, desc) = exportdesc(i)?;
 	Ok((i, Export { name, desc }))
-}
-
-#[derive(Debug)]
-pub enum ExportDesc {
-	Func(FuncIdx),
-	Table(TableIdx),
-	Mem(MemIdx),
-	Global(GlobalIdx),
-}
-impl ExportDesc {
-	fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		match self {
-			ExportDesc::Func(idx) => {
-				write!(f, "func ")?;
-				idx.write_wat(f)
-			},
-			ExportDesc::Table(idx) => {
-				write!(f, "table ")?;
-				idx.write_wat(f)
-			},
-			ExportDesc::Mem(idx) => {
-				write!(f, "memory ")?;
-				idx.write_wat(f)
-			},
-			ExportDesc::Global(idx) => {
-				write!(f, "global ")?;
-				idx.write_wat(f)
-			},
-		}
-	}
 }
 
 fn exportdesc(i: &[u8]) -> IResult<&[u8], ExportDesc> {
@@ -292,15 +171,9 @@ fn exportdesc(i: &[u8]) -> IResult<&[u8], ExportDesc> {
 	Ok((i, desc))
 }
 
-fn startsec(i: &[u8]) -> IResult<&[u8], Start> {
+fn startsec(i: &[u8]) -> IResult<&[u8], Option<Start>> {
 	let (i, start) = opt(section(8, start))(i)?;
-	let start = start.unwrap_or(Start::default());
 	Ok((i, start))
-}
-
-#[derive(Debug, Default)]
-pub struct Start {
-	pub func: FuncIdx,
 }
 
 fn start(i: &[u8]) -> IResult<&[u8], Start> {
@@ -314,30 +187,11 @@ fn elemsec(i: &[u8]) -> IResult<&[u8], Vec<Elem>> {
 	Ok((i, elems))
 }
 
-#[derive(Debug)]
-pub struct Elem {
-	pub table: TableIdx,
-	pub offset: Expr,
-	pub inits: Vec<FuncIdx>,
-}
-impl Elem {
-	fn write_wat(&self, f: &mut dyn fmt::Write, idx: usize) -> fmt::Result {
-		write!(f, "(elem (;{};) (", idx)?;
-		self.offset.write_wat(f, 4)?;
-		write!(f, ")")?;
-		for init in &self.inits {
-			write!(f, " ")?;
-			init.write_wat(f)?;
-		}
-		write!(f, ")")
-	}
-}
-
 fn elem(i: &[u8]) -> IResult<&[u8], Elem> {
 	let (i, table) = tableidx(i)?;
 	let (i, offset) = expr(i)?;
-	let (i, inits) = vec(funcidx)(i)?;
-	Ok((i, Elem { table, offset, inits }))
+	let (i, init) = vec(funcidx)(i)?;
+	Ok((i, Elem { table, offset, init }))
 }
 
 fn codesec(i: &[u8]) -> IResult<&[u8], Vec<(Vec<ValType>, Expr)>> {
@@ -372,95 +226,11 @@ fn datasec(i: &[u8]) -> IResult<&[u8], Vec<Data>> {
 	Ok((i, datas))
 }
 
-#[derive(Debug)]
-pub struct Data<'a> {
-	data: MemIdx,
-	offset: Expr,
-	init: &'a [u8],
-}
-
 fn data(i: &[u8]) -> IResult<&[u8], Data> {
 	let (i, data) = memidx(i)?;
 	let (i, offset) = expr(i)?;
 	let (i, init) = vec_byte(i)?;
 	Ok((i, Data { data, offset, init }))
-}
-
-#[derive(Debug)]
-pub struct Module<'a> {
-	pub customs: Vec<Custom<'a>>,
-	pub types: Vec<FuncType>,
-	pub funcs: Vec<Func>,
-	pub tables: Vec<Table>,
-	pub mems: Vec<Mem>,
-	pub globals: Vec<Global>,
-	pub exports: Vec<Export<'a>>,
-	pub start: Start,
-	pub elems: Vec<Elem>,
-	pub datas: Vec<Data<'a>>,
-}
-impl<'a> Module<'a> {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write) -> fmt::Result {
-		if self.customs.len() != 0 {
-			panic!("display for Custom not implemented yet");
-		}
-
-		write!(f, "(module")?;
-		for (idx, typ) in self.types.iter().enumerate() {
-			write!(f, "\n  ")?;
-			typ.write_wat(f, idx)?;
-		}
-		for (idx, func) in self.funcs.iter().enumerate() {
-			write!(f, "\n  ")?;
-			func.write_wat(f, idx)?;
-		}
-		for (idx, table) in self.tables.iter().enumerate() {
-			write!(f, "\n  ")?;
-			table.write_wat(f, idx)?;
-		}
-		for (idx, mem) in self.mems.iter().enumerate() {
-			write!(f, "\n  ")?;
-			mem.write_wat(f, idx)?;
-		}
-		for (idx, global) in self.globals.iter().enumerate() {
-			write!(f, "\n  ")?;
-			global.write_wat(f, idx)?;
-		}
-		for export in &self.exports {
-			write!(f, "\n  ")?;
-			export.write_wat(f)?;
-		}
-		for (idx, elem) in self.elems.iter().enumerate() {
-			write!(f, "\n  ")?;
-			elem.write_wat(f, idx)?;
-		}
-		write!(f, ")\n")
-	}
-}
-
-#[derive(Debug)]
-pub struct Func {
-	typ: TypeIdx,
-	locals: Vec<ValType>,
-	body: Expr,
-}
-impl Func {
-	pub fn write_wat(&self, f: &mut dyn fmt::Write, idx: usize) -> fmt::Result {
-		write!(f, "(func (;{};) (type ", idx)?;
-		self.typ.write_wat(f)?;
-		write!(f, ")")?;
-		if self.locals.len() > 0 {
-			write!(f, "\n    (local")?;
-			for local in &self.locals {
-				write!(f, " ")?;
-				local.write_wat(f)?;
-			}
-			write!(f, ")\n    ")?;
-		}
-		self.body.write_wat(f, 4)?;
-		write!(f, ")")?;
-		Ok(())
-	}
 }
 
 pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
@@ -490,16 +260,16 @@ pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
 	let (i, _) = append_customs(i)?;
 	let (i, start) = startsec(i)?;
 	let (i, _) = append_customs(i)?;
-	let (i, elems) = elemsec(i)?;
+	let (i, elem) = elemsec(i)?;
 	let (i, _) = append_customs(i)?;
 	let (i, codes) = codesec(i)?;
 	let (i, _) = append_customs(i)?;
-	let (i, datas) = datasec(i)?;
+	let (i, data) = datasec(i)?;
 	let (i, _) = append_customs(i)?;
 
 	let funcs = funcs.into_iter().zip(codes).map(|(typ, (locals, body))| Func { typ, locals, body }).collect();
 
-	Ok((i, Module { customs, types, funcs, tables, mems, globals, exports, start, elems, datas }))
+	Ok((i, Module { types, funcs, tables, mems, globals, elem, data, start, exports, customs }))
 }
 
 fn magic(i: &[u8]) -> IResult<&[u8], &[u8]> {
