@@ -6,15 +6,16 @@ extern crate alloc;
 extern crate log;
 
 mod binary;
-mod structure;
-mod validation;
+mod exec;
+mod syntax;
+mod valid;
 
-pub use binary::module_decode;
-pub use validation::module_validate;
+pub use exec::runtime::Store;
+pub use syntax::modules::Module;
 
 #[test]
 pub fn test_wasm() {
 	let wasm = include_bytes!("../../../../target/wasm32-unknown-unknown/debug/wasm-test.wasm");
-	let module = module_decode(wasm).unwrap();
-	module_validate(&module).unwrap();
+	let module = Module::decode(wasm).unwrap();
+	module.validate().unwrap();
 }

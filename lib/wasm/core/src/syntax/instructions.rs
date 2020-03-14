@@ -1,4 +1,4 @@
-use crate::structure::{
+use crate::syntax::{
 	modules::{FuncIdx, GlobalIdx, LabelIdx, LocalIdx, TypeIdx},
 	types::{ResultType, ValType},
 };

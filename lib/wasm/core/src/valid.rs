@@ -1,19 +1,10 @@
+pub mod modules;
+
 mod instructions;
-mod modules;
 mod types;
 
-use crate::structure::{
-	modules::Module,
-	types::{FuncType, GlobalType, MemType, ResultType, TableType, ValType},
-};
+use crate::syntax::types::{FuncType, GlobalType, MemType, ResultType, TableType, ValType};
 use alloc::vec::Vec;
-
-use modules::validate_module;
-
-pub fn module_validate(module: &Module) -> Result<(), &'static str> {
-	info!("validating wasm...");
-	validate_module(module)
-}
 
 #[derive(Clone, Debug, Default)]
 struct Context<'a> {

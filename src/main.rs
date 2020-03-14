@@ -12,7 +12,7 @@ mod logger;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use jitos::println;
-use wasm_core::{module_decode, module_validate};
+use wasm_core::{Module, Store};
 
 entry_point!(kernel_main);
 
@@ -25,8 +25,9 @@ fn kernel_main(_boot_info: &'static BootInfo) -> ! {
 	// let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
 	let wasm = include_bytes!("../target/wasm32-unknown-unknown/debug/wasm-test.wasm");
-	let module = module_decode(wasm).unwrap();
-	module_validate(&module).unwrap();
+	let module = Module::decode(wasm).unwrap();
+	module.validate().unwrap();
+	let store = Store::init();
 
 	#[cfg(test)]
 	test_main();

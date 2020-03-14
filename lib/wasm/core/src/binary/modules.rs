@@ -4,7 +4,7 @@ use crate::{
 		types::{functype, globaltype, memtype, tabletype, valtype},
 		values::{name, u32, vec, vec_byte},
 	},
-	structure::{
+	syntax::{
 		instructions::Expr,
 		modules::{
 			Data, Elem, Export, ExportDesc, Func, FuncIdx, Global, GlobalIdx, LabelIdx, LocalIdx, Mem, MemIdx, Module,

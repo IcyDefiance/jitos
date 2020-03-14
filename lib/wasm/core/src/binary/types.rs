@@ -1,6 +1,6 @@
 use crate::{
 	binary::values::{u32, vec},
-	structure::types::{ElemType, FuncType, GlobalType, Limits, MemType, Mut, ResultType, TableType, ValType},
+	syntax::types::{ElemType, FuncType, GlobalType, Limits, MemType, Mut, ResultType, TableType, ValType},
 };
 use core::convert::TryFrom;
 use nom::{

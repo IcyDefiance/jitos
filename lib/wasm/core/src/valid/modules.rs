@@ -1,9 +1,9 @@
 use crate::{
-	structure::{
+	syntax::{
 		modules::{Data, Elem, Func, Global, Mem, Module, Start, Table},
 		types::{ElemType, ResultType, ValType},
 	},
-	validation::{
+	valid::{
 		instructions::validate_expr,
 		types::{validate_functype, validate_globaltype, validate_memtype, validate_tabletype},
 		Context,

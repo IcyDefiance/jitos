@@ -1,9 +1,9 @@
 use crate::{
-	structure::{
+	syntax::{
 		instructions::{Expr, Instr},
 		types::{ElemType, Mut, ResultType, ValType},
 	},
-	validation::Context,
+	valid::Context,
 };
 use alloc::vec::Vec;
 use core::{iter::once, slice};

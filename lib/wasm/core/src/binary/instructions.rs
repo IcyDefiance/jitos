@@ -4,7 +4,7 @@ use crate::{
 		types::blocktype,
 		values::{i32, i64, u32, vec},
 	},
-	structure::instructions::{Expr, Instr, MemArg},
+	syntax::instructions::{Expr, Instr, MemArg},
 };
 use nom::{bytes::streaming::tag, multi::many_till, number::streaming::le_u8, IResult};
 

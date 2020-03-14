@@ -1,11 +1,13 @@
 use crate::{
-	binary::modules::Custom,
-	structure::{
+	binary::modules::{module, Custom},
+	syntax::{
 		instructions::Expr,
 		types::{FuncType, GlobalType, MemType, TableType, ValType},
 	},
+	valid::modules::validate_module,
 };
 use alloc::vec::Vec;
+use nom::{error::ErrorKind, Err};
 
 #[derive(Debug)]
 pub struct Module<'a> {
@@ -20,6 +22,17 @@ pub struct Module<'a> {
 	// TODO: imports
 	pub exports: Vec<Export<'a>>,
 	pub customs: Vec<Custom<'a>>,
+}
+impl<'a> Module<'a> {
+	pub fn decode(bytes: &'a [u8]) -> Result<Self, Err<(&[u8], ErrorKind)>> {
+		info!("decoding wasm...");
+		module(bytes).map(|r| r.1)
+	}
+
+	pub fn validate(&self) -> Result<(), &str> {
+		info!("validating wasm...");
+		validate_module(self)
+	}
 }
 
 #[derive(Debug, Default)]
