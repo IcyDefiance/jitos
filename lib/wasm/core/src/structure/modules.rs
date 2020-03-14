@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	binary::modules::Custom,
 	structure::{
 		instructions::Expr,

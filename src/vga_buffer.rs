@@ -46,9 +46,12 @@ pub enum Color {
 #[repr(transparent)]
 struct VgaColor(u8);
 impl VgaColor {
-	/// Create a new `VgaColor` with the given foreground and background colors.
-	fn new(foreground: Color, background: Color) -> Self {
-		Self((background as u8) << 4 | (foreground as u8))
+	fn new(fg: Color, bg: Color) -> Self {
+		Self((bg as u8) << 4 | (fg as u8))
+	}
+
+	fn set_fg(&mut self, fg: Color) {
+		self.0 = self.0 & 0xF0 | fg as u8
 	}
 }
 
@@ -108,8 +111,38 @@ impl Writer {
 	/// support strings with non-ASCII characters, since they can't be printed in the VGA text
 	/// mode.
 	fn write_string(&mut self, s: &str) {
-		for byte in s.bytes() {
+		let mut bytes = s.bytes();
+		while let Some(byte) = bytes.next() {
 			match byte {
+				// ANSI escape code
+				0x1B => match bytes.next().unwrap() {
+					// control sequence introducer
+					b'[' => match bytes.next().unwrap() {
+						// color
+						b'0' => {
+							match bytes.next().unwrap() {
+								b';' => {
+									match bytes.next().unwrap() {
+										// foreground
+										b'3' => match bytes.next().unwrap() {
+											b'1' => self.color.set_fg(Color::Red),
+											b'2' => self.color.set_fg(Color::Green),
+											b'3' => self.color.set_fg(Color::Brown),
+											b'6' => self.color.set_fg(Color::Cyan),
+											_ => unimplemented!(),
+										},
+										_ => unimplemented!(),
+									}
+									assert_eq!(bytes.next().unwrap(), b'm');
+								},
+								b'm' => self.color.set_fg(Color::LightGray),
+								_ => unimplemented!(),
+							}
+						},
+						_ => unimplemented!(),
+					},
+					_ => unimplemented!(),
+				},
 				// printable ASCII byte or newline
 				0x20..=0x7e | b'\n' => self.write_byte(byte),
 				// not part of printable ASCII range

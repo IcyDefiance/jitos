@@ -8,6 +8,7 @@ edition = "2018"
 bootloader = { version = "0.8.0", features = ["map_physical_memory", "sse"] }
 hashbrown = "0.7.0"
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
+log = "0.4.8"
 nom = { version = "5.1.1", default-features = false, features = ["alloc"] }
 pc-keyboard = "0.3.1"
 pic8259_simple = "0.1.1"
@@ -15,6 +16,7 @@ spin = "0.5.2"
 target-lexicon = "0.10.0"
 uart_16550 = "0.2.0"
 volatile = "0.2.6"
+wasm-core = { path = "lib/wasm/core" }
 wee_alloc = { version = "0.4.5", features = ["static_array_backend"] }
 x86_64 = "0.7.5"
 
@@ -34,4 +36,4 @@ test-args = [
 test-success-exit-code = 33 # (0x10 << 1) | 1
 
 [workspace]
-members = ["wasm-test"]
+members = ["lib/wasm/core", "wasm-test"]

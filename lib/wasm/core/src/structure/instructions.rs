@@ -1,4 +1,4 @@
-use crate::wasm::structure::{
+use crate::structure::{
 	modules::{FuncIdx, GlobalIdx, LabelIdx, LocalIdx, TypeIdx},
 	types::{ResultType, ValType},
 };

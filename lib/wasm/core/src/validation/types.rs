@@ -1,4 +1,4 @@
-use crate::wasm::structure::types::{FuncType, GlobalType, Limits, MemType, TableType};
+use crate::structure::types::{FuncType, GlobalType, Limits, MemType, TableType};
 use core::{u16, u32};
 
 pub fn validate_limits(limits: &Limits, range: u32) -> Result<(), &'static str> {

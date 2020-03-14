@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	structure::{
 		instructions::{Expr, Instr},
 		types::{ElemType, Mut, ResultType, ValType},

@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	binary::{
 		instructions::expr,
 		types::{functype, globaltype, memtype, tabletype, valtype},

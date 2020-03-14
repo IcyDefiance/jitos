@@ -4,6 +4,7 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
 
@@ -12,7 +13,6 @@ pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod vga_buffer;
-pub mod wasm;
 
 use core::panic::PanicInfo;
 use x86_64::instructions::port::Port;

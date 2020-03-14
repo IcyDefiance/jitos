@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	binary::values::{u32, vec},
 	structure::types::{ElemType, FuncType, GlobalType, Limits, MemType, Mut, ResultType, TableType, ValType},
 };

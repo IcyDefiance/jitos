@@ -1,0 +1,10 @@
+[package]
+name = "wasm-core"
+version = "0.1.0"
+authors = ["Icy Defiance <icydefiance@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+hashbrown = "0.7.0"
+log = "0.4.8"
+nom = { version = "5.1.1", default-features = false, features = ["alloc"] }

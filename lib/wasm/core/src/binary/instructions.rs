@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	binary::{
 		modules::{funcidx, globalidx, labelidx, localidx, typeidx},
 		types::blocktype,

@@ -1,4 +1,4 @@
-use crate::wasm::{
+use crate::{
 	structure::{
 		modules::{Data, Elem, Func, Global, Mem, Module, Start, Table},
 		types::{ElemType, ResultType, ValType},
