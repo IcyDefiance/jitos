@@ -28,7 +28,7 @@ impl TryFrom<u8> for ValType {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResultType(pub Option<ValType>);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FuncType {
 	pub params: Vec<ValType>,
 	pub results: Vec<ValType>,
@@ -84,7 +84,7 @@ pub struct GlobalType {
 	pub valtype: ValType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mut {
 	Const = 0x00,
 	Var = 0x01,

@@ -5,17 +5,17 @@ extern crate alloc;
 #[macro_use]
 extern crate log;
 
-mod binary;
-mod exec;
-mod syntax;
-mod valid;
+pub mod exec;
+pub mod syntax;
 
-pub use exec::runtime::Store;
-pub use syntax::modules::Module;
+mod binary;
+mod valid;
 
 #[test]
 pub fn test_wasm() {
-	let wasm = include_bytes!("../../../../target/wasm32-unknown-unknown/debug/wasm-test.wasm");
-	let module = Module::decode(wasm).unwrap();
+	use syntax::modules::Module;
+
+	let wasm = include_bytes!("../../../../target/wasm32-wasi/debug/wasm-test.wasm");
+	let mut module = Module::decode(wasm).unwrap();
 	module.validate().unwrap();
 }

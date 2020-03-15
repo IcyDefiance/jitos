@@ -4,6 +4,7 @@
 #![test_runner(jitos::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#[macro_use]
 extern crate alloc;
 extern crate alloc as std;
 
@@ -12,7 +13,11 @@ mod logger;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use jitos::println;
-use wasm_core::{Module, Store};
+use wasm_core::{
+	exec::runtime::{Store, Val},
+	syntax::modules::Module,
+};
+use wasm_interpret::Interpreter;
 
 entry_point!(kernel_main);
 
@@ -24,10 +29,12 @@ fn kernel_main(_boot_info: &'static BootInfo) -> ! {
 	// let mut mapper = unsafe { memory::init(phys_mem_offset) };
 	// let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
-	let wasm = include_bytes!("../target/wasm32-unknown-unknown/debug/wasm-test.wasm");
-	let module = Module::decode(wasm).unwrap();
-	module.validate().unwrap();
-	let store = Store::init();
+	let wasm = include_bytes!("../target/wasm32-wasi/debug/wasm-test.wasm");
+	let mut module = Module::decode(wasm).unwrap();
+	let mut store = Store::<Interpreter>::init();
+	let inst = module.instantiate(&mut store, &[]).unwrap();
+	let main = inst.exports.get("main").unwrap().as_func();
+	store.invoke(&inst, main, vec![Val::I32(0), Val::I32(0)]);
 
 	#[cfg(test)]
 	test_main();

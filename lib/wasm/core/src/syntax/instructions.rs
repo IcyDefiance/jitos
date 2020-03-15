@@ -4,7 +4,7 @@ use crate::syntax::{
 };
 use alloc::vec::Vec;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Instr {
 	Unreachable,
 	Block(ResultType, Vec<Instr>),
@@ -79,13 +79,13 @@ pub enum Instr {
 	I64ExtendI32U,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MemArg {
 	pub align: u32,
 	pub offset: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Expr {
 	pub instrs: Vec<Instr>,
 }

@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
 use core::str;
 use nom::{
-	bytes::streaming::take,
+	bytes::complete::take,
 	combinator::{map_res, verify},
 	multi::count,
-	number::streaming::le_u8,
+	number::complete::le_u8,
 	IResult,
 };
 

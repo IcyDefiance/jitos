@@ -88,46 +88,46 @@ fn validate_start(c: &Context, start: &Start) -> Result<(), &'static str> {
 pub fn validate_module(module: &Module) -> Result<(), &'static str> {
 	// TODO: concat imports in funcs, tables, mems, and globals
 	let c = Context {
-		types: module.types.iter().collect(),
-		funcs: module.funcs.iter().map(|f| &module.types[f.typ.0 as usize]).collect(),
-		tables: module.tables.iter().map(|t| &t.typ).collect(),
-		mems: module.mems.iter().map(|m| &m.typ).collect(),
-		globals: module.globals.iter().map(|m| &m.typ).collect(),
+		types: module.types().iter().collect(),
+		funcs: module.funcs().iter().map(|f| &module.types()[f.typ.0 as usize]).collect(),
+		tables: module.tables().iter().map(|t| &t.typ).collect(),
+		mems: module.mems().iter().map(|m| &m.typ).collect(),
+		globals: module.globals().iter().map(|m| &m.typ).collect(),
 		locals: vec![],
 		labels: vec![],
 		retur: None,
 	};
 
-	for functype in &module.types {
+	for functype in module.types() {
 		validate_functype(functype)?;
 	}
-	for func in &module.funcs {
+	for func in module.funcs() {
 		validate_func(&c, func)?;
 	}
-	for table in &module.tables {
+	for table in module.tables() {
 		validate_table(table)?;
 	}
-	for mem in &module.mems {
+	for mem in module.mems() {
 		validate_mem(mem)?;
 	}
-	for global in &module.globals {
+	for global in module.globals() {
 		validate_global(&c, global)?;
 	}
-	for elem in &module.elem {
+	for elem in module.elem() {
 		validate_elem(&c, elem)?;
 	}
-	for data in &module.data {
+	for data in module.data() {
 		validate_data(&c, data)?;
 	}
-	if let Some(start) = &module.start {
+	if let Some(start) = module.start() {
 		validate_start(&c, start)?;
 	}
-	// for import in &module.imports {
+	// for import in module.imports() {
 	// 	// TODO: validate imports
 	// }
 	{
 		let mut names = HashSet::new();
-		for export in &module.exports {
+		for export in module.exports() {
 			// TODO: validate exports
 			if !names.insert(export.name) {
 				return Err("module: All export names must be different.");

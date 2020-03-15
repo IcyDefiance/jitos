@@ -5,10 +5,10 @@ use crate::{
 use core::convert::TryFrom;
 use nom::{
 	branch::alt,
-	bytes::streaming::tag,
+	bytes::complete::tag,
 	combinator::{map, map_res, value},
 	error::{make_error, ErrorKind},
-	number::streaming::le_u8,
+	number::complete::le_u8,
 	IResult,
 };
 

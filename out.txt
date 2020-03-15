@@ -1,0 +1,59 @@
+jitos v0.1.0 (/home/icydefiance/Documents/code/jitos)
+├── bootloader v0.8.8
+│   └── bit_field v0.10.0
+├── hashbrown v0.7.0
+│   └── ahash v0.3.2
+│       └── const-random v0.1.8
+│           ├── const-random-macro v0.1.8
+│           │   ├── getrandom v0.1.14
+│           │   │   └── cfg-if v0.1.10
+│           │   └── proc-macro-hack v0.5.11
+│           │       ├── proc-macro2 v1.0.9
+│           │       │   └── unicode-xid v0.2.0
+│           │       ├── quote v1.0.3
+│           │       │   └── proc-macro2 v1.0.9 (*)
+│           │       └── syn v1.0.16
+│           │           ├── proc-macro2 v1.0.9 (*)
+│           │           ├── quote v1.0.3 (*)
+│           │           └── unicode-xid v0.2.0 (*)
+│           └── proc-macro-hack v0.5.11 (*)
+│   [build-dependencies]
+│   └── autocfg v1.0.0
+├── lazy_static v1.4.0
+│   └── spin v0.5.2
+├── log v0.4.8
+│   └── cfg-if v0.1.10 (*)
+├── nom v5.1.1
+│   └── memchr v2.3.3
+│   [build-dependencies]
+│   └── version_check v0.9.1
+├── pc-keyboard v0.3.1
+├── pic8259_simple v0.1.1
+│   └── cpuio v0.2.0
+├── spin v0.5.2 (*)
+├── target-lexicon v0.10.0
+├── uart_16550 v0.2.4
+│   ├── bitflags v1.2.1
+│   └── x86_64 v0.9.5
+│       ├── bit_field v0.9.0
+│       └── bitflags v1.2.1 (*)
+├── volatile v0.2.6
+├── wasm-core v0.1.0 (/home/icydefiance/Documents/code/jitos/lib/wasm/core)
+│   ├── hashbrown v0.7.0 (*)
+│   ├── log v0.4.8 (*)
+│   └── nom v5.1.1 (*)
+├── wee_alloc v0.4.5
+│   ├── cfg-if v0.1.10 (*)
+│   ├── memory_units v0.4.0
+│   └── spin v0.5.2 (*)
+└── x86_64 v0.7.7
+    ├── array-init v0.0.4
+    │   └── nodrop v0.1.14
+    ├── bit_field v0.9.0 (*)
+    ├── bitflags v1.2.1 (*)
+    ├── cast v0.2.3
+    │   [build-dependencies]
+    │   └── rustc_version v0.2.3
+    │       └── semver v0.9.0
+    │           └── semver-parser v0.7.0
+    └── ux v0.1.3

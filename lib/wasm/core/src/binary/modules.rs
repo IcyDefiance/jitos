@@ -16,11 +16,11 @@ use crate::{
 use alloc::vec::Vec;
 use core::iter::repeat;
 use nom::{
-	bytes::streaming::{tag, take},
+	bytes::complete::{tag, take},
 	combinator::{complete, map, opt, rest},
 	error::{make_error, ErrorKind},
 	multi::many0,
-	number::streaming::le_u8,
+	number::complete::le_u8,
 	IResult,
 };
 
@@ -221,7 +221,7 @@ fn locals(i: &[u8]) -> IResult<&[u8], impl Iterator<Item = ValType>> {
 }
 
 fn datasec(i: &[u8]) -> IResult<&[u8], Vec<Data>> {
-	let (i, datas) = opt(section(10, vec(data)))(i)?;
+	let (i, datas) = opt(section(11, vec(data)))(i)?;
 	let datas = datas.unwrap_or(vec![]);
 	Ok((i, datas))
 }
@@ -269,7 +269,7 @@ pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
 
 	let funcs = funcs.into_iter().zip(codes).map(|(typ, (locals, body))| Func { typ, locals, body }).collect();
 
-	Ok((i, Module { types, funcs, tables, mems, globals, elem, data, start, exports, customs }))
+	Ok((i, Module::new(types, funcs, tables, mems, globals, elem, data, start, exports, customs)))
 }
 
 fn magic(i: &[u8]) -> IResult<&[u8], &[u8]> {

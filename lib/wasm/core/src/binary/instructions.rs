@@ -6,7 +6,7 @@ use crate::{
 	},
 	syntax::instructions::{Expr, Instr, MemArg},
 };
-use nom::{bytes::streaming::tag, multi::many_till, number::streaming::le_u8, IResult};
+use nom::{bytes::complete::tag, multi::many_till, number::complete::le_u8, IResult};
 
 fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 	let (i, opcode) = le_u8(i)?;
