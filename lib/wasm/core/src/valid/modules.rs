@@ -1,6 +1,6 @@
 use crate::{
 	syntax::{
-		modules::{Data, Elem, Func, Global, Mem, Module, Start, Table},
+		modules::{Data, Elem, Export, ExportDesc, Func, Global, Import, ImportDesc, Mem, Module, Start, Table},
 		types::{ElemType, ResultType, ValType},
 	},
 	valid::{
@@ -85,18 +85,92 @@ fn validate_start(c: &Context, start: &Start) -> Result<(), &'static str> {
 	Ok(())
 }
 
+fn validate_import(c: &Context, import: &Import) -> Result<(), &'static str> {
+	validate_importdesc(c, &import.desc)?;
+	Ok(())
+}
+
+fn validate_importdesc(c: &Context, importdesc: &ImportDesc) -> Result<(), &'static str> {
+	match importdesc {
+		ImportDesc::Func(typeidx) => {
+			if typeidx.0 as usize >= c.types.len() {
+				return Err("undefined type");
+			}
+		},
+		ImportDesc::Table(tabletype) => validate_tabletype(tabletype)?,
+		ImportDesc::Mem(memtype) => validate_memtype(memtype)?,
+		ImportDesc::Global(globaltype) => validate_globaltype(globaltype)?,
+	}
+	Ok(())
+}
+
+fn validate_export(c: &Context, export: &Export) -> Result<(), &'static str> {
+	validate_exportdesc(c, &export.desc)?;
+	Ok(())
+}
+
+fn validate_exportdesc(c: &Context, exportdesc: &ExportDesc) -> Result<(), &'static str> {
+	match exportdesc {
+		ExportDesc::Func(funcidx) => {
+			if funcidx.0 as usize >= c.funcs.len() {
+				return Err("undefined func");
+			}
+		},
+		ExportDesc::Table(tableidx) => {
+			if tableidx.0 as usize >= c.tables.len() {
+				return Err("undefined table");
+			}
+		},
+		ExportDesc::Mem(memidx) => {
+			if memidx.0 as usize >= c.mems.len() {
+				return Err("undefined mem");
+			}
+		},
+		ExportDesc::Global(globalidx) => {
+			if globalidx.0 as usize >= c.globals.len() {
+				return Err("undefined global");
+			}
+		},
+	}
+	Ok(())
+}
+
 pub fn validate_module(module: &Module) -> Result<(), &'static str> {
 	// TODO: concat imports in funcs, tables, mems, and globals
 	let c = Context {
 		types: module.types().iter().collect(),
-		funcs: module.funcs().iter().map(|f| &module.types()[f.typ.0 as usize]).collect(),
-		tables: module.tables().iter().map(|t| &t.typ).collect(),
-		mems: module.mems().iter().map(|m| &m.typ).collect(),
-		globals: module.globals().iter().map(|m| &m.typ).collect(),
+		funcs: module
+			.imports()
+			.iter()
+			.filter_map(|i| i.desc.as_func())
+			.chain(module.funcs().iter().map(|f| f.typ))
+			.map(|typ| &module.types()[typ.0 as usize])
+			.collect(),
+		tables: module
+			.imports()
+			.iter()
+			.filter_map(|i| i.desc.as_table())
+			.chain(module.tables().iter().map(|t| &t.typ))
+			.collect(),
+		mems: module
+			.imports()
+			.iter()
+			.filter_map(|i| i.desc.as_mem())
+			.chain(module.mems().iter().map(|t| &t.typ))
+			.collect(),
+		globals: module
+			.imports()
+			.iter()
+			.filter_map(|i| i.desc.as_global())
+			.chain(module.globals().iter().map(|t| &t.typ))
+			.collect(),
 		locals: vec![],
 		labels: vec![],
 		retur: None,
 	};
+
+	let cp =
+		Context { globals: module.imports().iter().filter_map(|i| i.desc.as_global()).collect(), ..Context::default() };
 
 	for functype in module.types() {
 		validate_functype(functype)?;
@@ -111,7 +185,7 @@ pub fn validate_module(module: &Module) -> Result<(), &'static str> {
 		validate_mem(mem)?;
 	}
 	for global in module.globals() {
-		validate_global(&c, global)?;
+		validate_global(&cp, global)?;
 	}
 	for elem in module.elem() {
 		validate_elem(&c, elem)?;
@@ -122,13 +196,13 @@ pub fn validate_module(module: &Module) -> Result<(), &'static str> {
 	if let Some(start) = module.start() {
 		validate_start(&c, start)?;
 	}
-	// for import in module.imports() {
-	// 	// TODO: validate imports
-	// }
+	for import in module.imports() {
+		validate_import(&c, import)?;
+	}
 	{
 		let mut names = HashSet::new();
 		for export in module.exports() {
-			// TODO: validate exports
+			validate_export(&c, export)?;
 			if !names.insert(export.name) {
 				return Err("module: All export names must be different.");
 			}

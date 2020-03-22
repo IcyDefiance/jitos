@@ -17,15 +17,15 @@ use nom::{error::ErrorKind, Err};
 #[derive(Debug)]
 pub struct Module<'a> {
 	types: Vec<FuncType>,
-	pub(crate) funcs: Vec<Func>,
-	pub(crate) tables: Vec<Table>,
-	pub(crate) mems: Vec<Mem>,
-	pub(crate) globals: Vec<Global>,
-	pub(crate) elem: Vec<Elem>,
-	pub(crate) data: Vec<Data<'a>>,
+	funcs: Vec<Func>,
+	tables: Vec<Table>,
+	mems: Vec<Mem>,
+	globals: Vec<Global>,
+	elem: Vec<Elem>,
+	data: Vec<Data<'a>>,
 	start: Option<Start>,
-	// TODO: imports
-	pub(crate) exports: Vec<Export<'a>>,
+	imports: Vec<Import<'a>>,
+	exports: Vec<Export<'a>>,
 	customs: Vec<Custom<'a>>,
 	valid: Option<Result<(), &'static str>>,
 }
@@ -39,10 +39,11 @@ impl<'a> Module<'a> {
 		elem: Vec<Elem>,
 		data: Vec<Data<'a>>,
 		start: Option<Start>,
+		imports: Vec<Import<'a>>,
 		exports: Vec<Export<'a>>,
 		customs: Vec<Custom<'a>>,
 	) -> Self {
-		Self { types, funcs, tables, mems, globals, elem, data, start, exports, customs, valid: None }
+		Self { types, funcs, tables, mems, globals, elem, data, start, imports, exports, customs, valid: None }
 	}
 
 	pub fn types(&self) -> &Vec<FuncType> {
@@ -77,6 +78,10 @@ impl<'a> Module<'a> {
 		&self.start
 	}
 
+	pub fn imports(&self) -> &Vec<Import<'a>> {
+		&self.imports
+	}
+
 	pub fn exports(&self) -> &Vec<Export<'a>> {
 		&self.exports
 	}
@@ -87,18 +92,22 @@ impl<'a> Module<'a> {
 
 	pub fn decode(bytes: &'a [u8]) -> Result<Self, Err<(&[u8], ErrorKind)>> {
 		info!("decoding...");
-		decode(bytes)
+		let ret = decode(bytes);
+		info!("done decoding");
+		ret
 	}
 
 	pub fn validate(&mut self) -> Result<(), &'static str> {
 		info!("validating...");
-		if let Some(valid) = self.valid {
+		let ret = if let Some(valid) = self.valid {
 			valid
 		} else {
 			let res = validate_module(self);
 			self.valid = Some(res);
 			res
-		}
+		};
+		info!("done validating");
+		ret
 	}
 
 	pub fn instantiate<E: Embedder>(
@@ -107,11 +116,13 @@ impl<'a> Module<'a> {
 		externs: &[ExternVal<E>],
 	) -> Result<ModuleInst<E>, &'static str> {
 		info!("instantiating...");
-		instantiate(store, self, externs)
+		let ret = instantiate(store, self, externs);
+		info!("done instantiating");
+		ret
 	}
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TypeIdx(pub u32);
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -193,4 +204,48 @@ pub enum ExportDesc {
 	Table(TableIdx),
 	Mem(MemIdx),
 	Global(GlobalIdx),
+}
+
+#[derive(Debug)]
+pub struct Import<'a> {
+	pub module: &'a str,
+	pub name: &'a str,
+	pub desc: ImportDesc,
+}
+
+#[derive(Debug)]
+pub enum ImportDesc {
+	Func(TypeIdx),
+	Table(TableType),
+	Mem(MemType),
+	Global(GlobalType),
+}
+impl ImportDesc {
+	pub fn as_func(&self) -> Option<TypeIdx> {
+		match self {
+			ImportDesc::Func(x) => Some(*x),
+			_ => None,
+		}
+	}
+
+	pub fn as_table(&self) -> Option<&TableType> {
+		match self {
+			ImportDesc::Table(x) => Some(x),
+			_ => None,
+		}
+	}
+
+	pub fn as_mem(&self) -> Option<&MemType> {
+		match self {
+			ImportDesc::Mem(x) => Some(x),
+			_ => None,
+		}
+	}
+
+	pub fn as_global(&self) -> Option<&GlobalType> {
+		match self {
+			ImportDesc::Global(x) => Some(x),
+			_ => None,
+		}
+	}
 }

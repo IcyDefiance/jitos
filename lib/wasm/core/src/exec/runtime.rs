@@ -1,6 +1,6 @@
 use crate::syntax::{
 	instructions::Expr,
-	modules::{Func, Global, Mem, Table},
+	modules::{Func, Global, Import, Mem, Table},
 	types::{FuncType, ValType},
 };
 use alloc::{string::String, vec::Vec};
@@ -30,6 +30,13 @@ impl Val {
 		}
 	}
 
+	pub fn as_i64(self) -> i64 {
+		match self {
+			Val::I64(x) => x,
+			_ => panic!("not an i64"),
+		}
+	}
+
 	pub fn typ(self) -> ValType {
 		match self {
 			Val::I32(_) => ValType::I32,
@@ -50,6 +57,7 @@ pub trait Embedder: Default {
 	type TableAddr: Clone;
 	type TableInst;
 
+	fn init(&mut self, s: &mut Store<Self>, inst: &mut ModuleInst<Self>, imports: &[Import]);
 	fn push_frame(&mut self, frame: Frame);
 	fn pop_frame(&mut self) -> Frame;
 	fn eval(&mut self, expr: &Expr) -> Val;

@@ -89,7 +89,14 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 			};
 			(i, instr)
 		},
-		0x40 => (i, Instr::MemoryGrow),
+		0x3F => {
+			let (i, _) = tag(&[0])(i)?;
+			(i, Instr::MemorySize)
+		},
+		0x40 => {
+			let (i, _) = tag(&[0])(i)?;
+			(i, Instr::MemoryGrow)
+		},
 		// *** NUMERIC ***
 		0x41 => {
 			let (i, n) = i32(i)?;
@@ -137,6 +144,7 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 		0x85 => (i, Instr::I64Xor),
 		0x86 => (i, Instr::I64Shl),
 		0x87 => (i, Instr::I64ShrS),
+		0x88 => (i, Instr::I64ShrU),
 		0xA7 => (i, Instr::I32WrapI64),
 		0xAC => (i, Instr::I64ExtendI32S),
 		0xAD => (i, Instr::I64ExtendI32U),

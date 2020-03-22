@@ -53,6 +53,7 @@ fn validate_instr_seq(
 	let mut i = 0;
 	while i < instrs.len() {
 		let instr = &instrs[i];
+		// debug!("{:?} {:?}", instr, stack);
 
 		if konst {
 			let is_const = match instr {
@@ -252,6 +253,12 @@ fn validate_instr_seq(
 				pop(&mut stack, typ)?;
 				pop(&mut stack, ValType::I32)?;
 			},
+			Instr::MemorySize => {
+				if c.mems.len() == 0 {
+					return Err("undefined mem");
+				}
+				stack.push(ValType::I32);
+			},
 			Instr::MemoryGrow => {
 				if c.mems.len() == 0 {
 					return Err("undefined mem");
@@ -298,6 +305,7 @@ fn validate_instr_seq(
 			Instr::I64Xor => binop(&mut stack, ValType::I64)?,
 			Instr::I64Shl => binop(&mut stack, ValType::I64)?,
 			Instr::I64ShrS => binop(&mut stack, ValType::I64)?,
+			Instr::I64ShrU => binop(&mut stack, ValType::I64)?,
 			Instr::I32WrapI64 => cvtop(&mut stack, ValType::I64, ValType::I32)?,
 			Instr::I64ExtendI32S => cvtop(&mut stack, ValType::I32, ValType::I64)?,
 			Instr::I64ExtendI32U => cvtop(&mut stack, ValType::I32, ValType::I64)?,

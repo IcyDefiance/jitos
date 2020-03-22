@@ -135,6 +135,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "jitos-wasi"
+version = "0.1.0"
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -330,6 +334,9 @@ dependencies = [
 name = "wasm-interpret"
 version = "0.1.0"
 dependencies = [
+ "hashbrown",
+ "jitos-wasi",
+ "lazy_static",
  "log",
  "wasm-core",
 ]

@@ -7,8 +7,8 @@ use crate::{
 	syntax::{
 		instructions::Expr,
 		modules::{
-			Data, Elem, Export, ExportDesc, Func, FuncIdx, Global, GlobalIdx, LabelIdx, LocalIdx, Mem, MemIdx, Module,
-			Start, Table, TableIdx, TypeIdx,
+			Data, Elem, Export, ExportDesc, Func, FuncIdx, Global, GlobalIdx, Import, ImportDesc, LabelIdx, LocalIdx,
+			Mem, MemIdx, Module, Start, Table, TableIdx, TypeIdx,
 		},
 		types::{FuncType, ValType},
 	},
@@ -87,12 +87,41 @@ fn typesec(i: &[u8]) -> IResult<&[u8], Vec<FuncType>> {
 	Ok((i, functypes))
 }
 
-fn importsec(i: &[u8]) -> IResult<&[u8], ()> {
-	let (i, res) = opt(section(2, |i| Ok((i, ()))))(i)?;
-	match res {
-		Some(_) => unimplemented!(),
-		None => Ok((i, ())),
-	}
+fn importsec(i: &[u8]) -> IResult<&[u8], Vec<Import>> {
+	let (i, imports) = opt(section(2, vec(import)))(i)?;
+	let imports = imports.unwrap_or(vec![]);
+	Ok((i, imports))
+}
+
+fn import(i: &[u8]) -> IResult<&[u8], Import> {
+	let (i, module) = name(i)?;
+	let (i, name) = name(i)?;
+	let (i, desc) = importdesc(i)?;
+	Ok((i, Import { module, name, desc }))
+}
+
+fn importdesc(i: &[u8]) -> IResult<&[u8], ImportDesc> {
+	let (i, flag) = le_u8(i)?;
+	let (i, desc) = match flag {
+		0x00 => {
+			let (i, idx) = typeidx(i)?;
+			(i, ImportDesc::Func(idx))
+		},
+		0x01 => {
+			let (i, idx) = tabletype(i)?;
+			(i, ImportDesc::Table(idx))
+		},
+		0x02 => {
+			let (i, idx) = memtype(i)?;
+			(i, ImportDesc::Mem(idx))
+		},
+		0x03 => {
+			let (i, idx) = globaltype(i)?;
+			(i, ImportDesc::Global(idx))
+		},
+		_ => return Err(nom::Err::Error(make_error(i, ErrorKind::Switch))),
+	};
+	Ok((i, desc))
 }
 
 fn funcsec(i: &[u8]) -> IResult<&[u8], Vec<TypeIdx>> {
@@ -246,7 +275,7 @@ pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
 	let (i, _) = append_customs(i)?;
 	let (i, types) = typesec(i)?;
 	let (i, _) = append_customs(i)?;
-	let (i, _) = importsec(i)?; // ignoring for now, because I don't have a test case
+	let (i, imports) = importsec(i)?;
 	let (i, _) = append_customs(i)?;
 	let (i, funcs) = funcsec(i)?;
 	let (i, _) = append_customs(i)?;
@@ -269,7 +298,7 @@ pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
 
 	let funcs = funcs.into_iter().zip(codes).map(|(typ, (locals, body))| Func { typ, locals, body }).collect();
 
-	Ok((i, Module::new(types, funcs, tables, mems, globals, elem, data, start, exports, customs)))
+	Ok((i, Module::new(types, funcs, tables, mems, globals, elem, data, start, imports, exports, customs)))
 }
 
 fn magic(i: &[u8]) -> IResult<&[u8], &[u8]> {

@@ -4,6 +4,7 @@ extern crate log;
 
 use crate::println;
 use alloc::string::ToString;
+use jitos::serial_println;
 use lazy_static::lazy_static;
 use log::{Level, Log, Metadata, Record, SetLoggerError};
 
@@ -33,6 +34,7 @@ impl Log for Logger {
 			let target =
 				if record.target().len() > 0 { record.target() } else { record.module_path().unwrap_or_default() };
 			println!("{}{:<5}{} [{}] {}", color, level_string, nc, target, record.args());
+			serial_println!("{}{:<5}{} [{}] {}", color, level_string, nc, target, record.args());
 		}
 	}
 

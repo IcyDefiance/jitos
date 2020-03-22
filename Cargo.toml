@@ -37,4 +37,4 @@ test-args = [
 test-success-exit-code = 33 # (0x10 << 1) | 1
 
 [workspace]
-members = ["lib/wasm/core", "lib/wasm/interpret", "wasm-test"]
+members = ["lib/wasi", "lib/wasm/core", "lib/wasm/interpret", "wasm-test"]
