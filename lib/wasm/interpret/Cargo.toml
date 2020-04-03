@@ -12,3 +12,8 @@ log = "0.4.8"
 jitos-wasi = { path = "../../wasi" }
 lazy_static = { version = "1.0", features = ["spin_no_std"] }
 wasm-core = { path = "../core" }
+
+[dev-dependencies]
+serde = "1.0.105"
+serde_derive = "1.0.105"
+serde_json = "1.0.50"

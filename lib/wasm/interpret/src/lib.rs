@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 #[macro_use]
 extern crate alloc;
@@ -59,7 +59,7 @@ impl Interpreter {
 		ret
 	}
 
-	fn invoke_func(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: u32) {
+	fn invoke_func(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: u32) -> Result<(), &'static str> {
 		match &s.funcs[funcaddr as usize] {
 			FuncInst::Func(func) => {
 				trace!("invoke_func {} : {:?}", funcaddr, self.stacks.last().unwrap());
@@ -73,37 +73,48 @@ impl Interpreter {
 					.collect();
 				self.push_frame(Frame::new(locals));
 				self.push_lbl(typ.results.len() as _);
-				self.exec(s, inst, &f.body.instrs);
-				let results: Vec<_> = typ.results.iter().map(|_| self.pop_val()).collect();
+				let results: Result<Vec<_>, _> =
+					self.exec(s, inst, &f.body.instrs).map(|_| typ.results.iter().map(|_| self.pop_val()).collect());
 				self.pop_frame();
-				for res in results.into_iter().rev() {
+				for res in results?.into_iter().rev() {
 					self.push_val(res);
 				}
 				trace!("ret ({} labels) : {:?}", self.labels().len(), self.stacks.last().unwrap());
 			},
 			FuncInst::HostFunc(host_func) => unsafe { (host_func.func)(s, inst, self.stacks.last_mut().unwrap()) },
 		}
+		Ok(())
 	}
 
-	fn exec(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, instrs: &[Instr]) -> Control {
+	fn exec(
+		&mut self,
+		s: &mut Store<Self>,
+		inst: &ModuleInst<Self>,
+		instrs: &[Instr],
+	) -> Result<Control, &'static str> {
 		for instr in instrs {
 			debug!("{:?} : {:?}", instr, self.stacks.last().unwrap());
-			let control = self.exec_instr(s, inst, instr);
+			let control = self.exec_instr(s, inst, instr)?;
 			match control {
 				Control::Continue => (),
-				Control::Break(lbl) => return Control::Break(lbl),
-				Control::Return => return Control::Return,
+				Control::Break(lbl) => return Ok(Control::Break(lbl)),
+				Control::Return => return Ok(Control::Return),
 			}
 		}
-		Control::Continue
+		Ok(Control::Continue)
 	}
 
-	fn exec_instr(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, instr: &Instr) -> Control {
+	fn exec_instr(
+		&mut self,
+		s: &mut Store<Self>,
+		inst: &ModuleInst<Self>,
+		instr: &Instr,
+	) -> Result<Control, &'static str> {
 		match instr {
 			Instr::Unreachable => panic!("unreachable instruction reached"),
 			Instr::Block(res, instrs) => {
 				self.push_lbl(res.0.is_some() as u32);
-				let control = self.exec(s, inst, instrs);
+				let control = self.exec(s, inst, instrs)?;
 				match control {
 					Control::Continue => {
 						let stack: Vec<_> = self.stacks.pop().unwrap();
@@ -112,15 +123,15 @@ impl Interpreter {
 					},
 					Control::Break(lbl) => {
 						if lbl > 0 {
-							return Control::Break(lbl - 1);
+							return Ok(Control::Break(lbl - 1));
 						}
 					},
-					Control::Return => return Control::Return,
+					Control::Return => return Ok(Control::Return),
 				}
 			},
 			Instr::Loop(_, instrs) => loop {
 				self.push_lbl(0);
-				let control = self.exec(s, inst, instrs);
+				let control = self.exec(s, inst, instrs)?;
 				match control {
 					Control::Continue => {
 						let stack: Vec<_> = self.stacks.pop().unwrap();
@@ -130,10 +141,10 @@ impl Interpreter {
 					},
 					Control::Break(lbl) => {
 						if lbl > 0 {
-							return Control::Break(lbl - 1);
+							return Ok(Control::Break(lbl - 1));
 						}
 					},
-					Control::Return => return Control::Return,
+					Control::Return => return Ok(Control::Return),
 				}
 			},
 			Instr::Br(l) => {
@@ -147,7 +158,7 @@ impl Interpreter {
 					self.push_val(val);
 				}
 				// debug!("br {} ({})", l.0, self.labels().len());
-				return Control::Break(l.0);
+				return Ok(Control::Break(l.0));
 			},
 			Instr::BrIf(l) => {
 				let c = self.pop_val().as_i32();
@@ -160,8 +171,8 @@ impl Interpreter {
 				let l = if i < ls.len() { ls[i] } else { *ln };
 				return self.exec_instr(s, inst, &Instr::Br(l));
 			},
-			Instr::Return => return Control::Return,
-			Instr::Call(x) => self.invoke_func(s, inst, inst.funcaddrs[x.0 as usize]),
+			Instr::Return => return Ok(Control::Return),
+			Instr::Call(x) => self.invoke_func(s, inst, inst.funcaddrs[x.0 as usize])?,
 			Instr::CallIndirect(x) => {
 				let tab = &s.tables[inst.tableaddrs[0] as usize];
 				let i = self.pop_val().as_i32() as usize;
@@ -169,7 +180,7 @@ impl Interpreter {
 				let a = tab.0[i].unwrap();
 				let f = &s.funcs[a as usize];
 				assert!(*x == f.typ());
-				self.invoke_func(s, inst, inst.funcaddrs[a as usize]);
+				self.invoke_func(s, inst, inst.funcaddrs[a as usize])?;
 			},
 			// Instr::Drop,
 			Instr::Select => {
@@ -187,50 +198,80 @@ impl Interpreter {
 				let val = self.pop_val();
 				self.push_val(val);
 				self.push_val(val);
-				self.exec_instr(s, inst, &Instr::LocalSet(*x));
+				return self.exec_instr(s, inst, &Instr::LocalSet(*x));
 			},
 			Instr::GlobalGet(x) => self.push_val(s.globals[inst.globaladdrs[x.0 as usize] as usize].0),
 			Instr::GlobalSet(x) => s.globals[inst.globaladdrs[x.0 as usize] as usize].0 = self.pop_val(),
 			Instr::I32Load(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 4];
-				bs.copy_from_slice(&mem[ea..ea + 4]);
+				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
 				self.push_val(Val::I32(unsafe { transmute(bs) }));
 			},
 			Instr::I64Load(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 8];
-				bs.copy_from_slice(&mem[ea..ea + 8]);
+				bs.copy_from_slice(mem.get(ea..ea + 8).ok_or("out of bounds memory access")?);
 				self.push_val(Val::I64(unsafe { transmute(bs) }));
 			},
-			// Instr::I32Load8S(MemArg),
-			Instr::I32Load8U(m) => {
+			Instr::F32Load(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
-				let b = mem[ea];
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let mut bs = [0; 4];
+				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
+				self.push_val(Val::F32(unsafe { transmute(bs) }));
+			},
+			Instr::I32Load8S(m) | Instr::I32Load8U(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let b = *mem.get(ea).ok_or("out of bounds memory access")?;
 				self.push_val(Val::I32(b as _));
 			},
-			// Instr::I32Load16U(MemArg),
-			// Instr::I64Load8U(MemArg),
-			// Instr::I64Load32U(MemArg),
+			Instr::I32Load16S(m) | Instr::I32Load16U(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let mut bs = [0; 2];
+				bs.copy_from_slice(mem.get(ea..ea + 2).ok_or("out of bounds memory access")?);
+				self.push_val(Val::I32(unsafe { transmute::<_, u16>(bs) } as _));
+			},
+			Instr::I64Load8S(m) | Instr::I64Load8U(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let b = *mem.get(ea).ok_or("out of bounds memory access")?;
+				self.push_val(Val::I64(b as _));
+			},
+			Instr::I64Load16S(m) | Instr::I64Load16U(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let mut bs = [0; 2];
+				bs.copy_from_slice(mem.get(ea..ea + 2).ok_or("out of bounds memory access")?);
+				self.push_val(Val::I64(unsafe { transmute::<_, u16>(bs) } as _));
+			},
+			Instr::I64Load32S(m) | Instr::I64Load32U(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let mut bs = [0; 4];
+				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
+				self.push_val(Val::I64(unsafe { transmute::<_, u32>(bs) } as _));
+			},
 			Instr::I32Store(m) => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
 				let c: [u8; 4] = unsafe { transmute(self.pop_val().as_i32()) };
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea..ea + 4].copy_from_slice(&c);
 			},
 			Instr::I64Store(m) => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
 				let c: [u8; 8] = unsafe { transmute(self.pop_val().as_i64()) };
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea..ea + 8].copy_from_slice(&c);
 			},
 			Instr::I32Store8(m) => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
 				let c = self.pop_val().as_i32();
-				let ea = (self.pop_val().as_i32() as u32 + m.offset) as usize;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea] = c as _;
 			},
 			// Instr::I32Store16(MemArg),
@@ -249,45 +290,53 @@ impl Interpreter {
 				self.push_val(Val::I32((lhs == 0) as i32));
 			},
 			Instr::I32Eq => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32((lhs == rhs) as i32));
 			},
 			Instr::I32Ne => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32((lhs != rhs) as i32));
 			},
-			// Instr::I32LtS,
+			Instr::I32LtS => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32((lhs < rhs) as i32));
+			},
 			Instr::I32LtU => {
-				let rhs = self.pop_val().as_i32() as u32;
 				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
 				self.push_val(Val::I32((lhs < rhs) as i32));
 			},
 			Instr::I32GtS => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32((lhs > rhs) as i32));
 			},
 			Instr::I32GtU => {
-				let rhs = self.pop_val().as_i32() as u32;
 				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
 				self.push_val(Val::I32((lhs > rhs) as i32));
 			},
 			Instr::I32LeS => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32((lhs <= rhs) as i32));
 			},
 			Instr::I32LeU => {
-				let rhs = self.pop_val().as_i32() as u32;
 				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
 				self.push_val(Val::I32((lhs <= rhs) as i32));
 			},
-			// Instr::I32GeS,
+			Instr::I32GeS => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32((lhs >= rhs) as i32));
+			},
 			Instr::I32GeU => {
-				let rhs = self.pop_val().as_i32() as u32;
 				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
 				self.push_val(Val::I32((lhs >= rhs) as i32));
 			},
 			// Instr::I64Eqz,
@@ -299,50 +348,95 @@ impl Interpreter {
 				let lhs = self.pop_val().as_i32();
 				self.push_val(Val::I32(lhs.leading_zeros() as _));
 			},
-			// Instr::I32Ctz,
-			Instr::I32Add => {
-				let rhs = self.pop_val().as_i32();
+			Instr::I32Ctz => {
 				let lhs = self.pop_val().as_i32();
-				self.push_val(Val::I32(lhs + rhs));
+				self.push_val(Val::I32(lhs.trailing_zeros() as _));
+			},
+			Instr::I32PopCnt => {
+				let lhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.count_ones() as _));
+			},
+			Instr::I32Add => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.overflowing_add(rhs).0));
 			},
 			Instr::I32Sub => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
-				self.push_val(Val::I32(lhs - rhs));
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.overflowing_sub(rhs).0));
 			},
 			Instr::I32Mul => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
-				self.push_val(Val::I32(lhs * rhs));
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.overflowing_mul(rhs).0));
 			},
-			// Instr::I32DivU,
-			Instr::I32And => {
-				let rhs = self.pop_val().as_i32();
+			Instr::I32DivS => {
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.checked_div(rhs).ok_or("div by zero")?));
+			},
+			Instr::I32DivU => {
+				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
+				self.push_val(Val::I32(lhs.checked_div(rhs).ok_or("div by zero")? as _));
+			},
+			Instr::I32RemS => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				if rhs == 0 {
+					return Err("rem by zero");
+				}
+				self.push_val(Val::I32(lhs.overflowing_rem(rhs).0));
+			},
+			Instr::I32RemU => {
+				let lhs = self.pop_val().as_i32() as u32;
+				let rhs = self.pop_val().as_i32() as u32;
+				if rhs == 0 {
+					return Err("rem by zero");
+				}
+				self.push_val(Val::I32(lhs.overflowing_rem(rhs).0 as _));
+			},
+			Instr::I32And => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32(lhs & rhs));
 			},
 			Instr::I32Or => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32(lhs | rhs));
 			},
 			Instr::I32Xor => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
 				self.push_val(Val::I32(lhs ^ rhs));
 			},
 			Instr::I32Shl => {
-				let rhs = self.pop_val().as_i32();
 				let lhs = self.pop_val().as_i32();
-				self.push_val(Val::I32(lhs << rhs));
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.overflowing_shl(rhs as _).0));
 			},
-			// Instr::I32ShrS,
+			Instr::I32ShrS => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32();
+				self.push_val(Val::I32(lhs.overflowing_shr(rhs as _).0));
+			},
 			Instr::I32ShrU => {
-				let rhs = self.pop_val().as_i32() as u32;
 				let lhs = self.pop_val().as_i32() as u32;
-				self.push_val(Val::I32((lhs >> rhs) as i32));
+				let rhs = self.pop_val().as_i32() as u32;
+				self.push_val(Val::I32((lhs.overflowing_shr(rhs).0) as i32));
 			},
-			// Instr::I32Rotl,
+			Instr::I32Rotl => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32() as u32;
+				self.push_val(Val::I32(lhs.rotate_left(rhs)));
+			},
+			Instr::I32Rotr => {
+				let lhs = self.pop_val().as_i32();
+				let rhs = self.pop_val().as_i32() as u32;
+				self.push_val(Val::I32(lhs.rotate_right(rhs)));
+			},
 			// Instr::I64Add,
 			// Instr::I64Sub,
 			// Instr::I64Mul,
@@ -357,7 +451,7 @@ impl Interpreter {
 			// Instr::I64ExtendI32U,
 			_ => unimplemented!("{:?}", instr),
 		}
-		Control::Continue
+		Ok(Control::Continue)
 	}
 }
 impl Embedder for Interpreter {
@@ -444,7 +538,13 @@ impl Embedder for Interpreter {
 		s.mems[mem as usize].0[offset..offset + data.len()].copy_from_slice(data);
 	}
 
-	fn invoke(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: Self::FuncAddr, args: Vec<Val>) {
+	fn invoke(
+		&mut self,
+		s: &mut Store<Self>,
+		inst: &ModuleInst<Self>,
+		funcaddr: Self::FuncAddr,
+		args: Vec<Val>,
+	) -> Result<Vec<Val>, &'static str> {
 		let funcinst = &s.funcs[funcaddr as usize];
 
 		let typ = &inst.types[funcinst.as_func().typ.0 as usize];
@@ -461,8 +561,9 @@ impl Embedder for Interpreter {
 		for arg in args {
 			self.push_val(arg);
 		}
-		self.invoke_func(s, inst, funcaddr);
+		let ret = self.invoke_func(s, inst, funcaddr).map(|_| self.stacks.last_mut().unwrap().drain(..).collect());
 		self.pop_frame();
+		ret
 	}
 }
 

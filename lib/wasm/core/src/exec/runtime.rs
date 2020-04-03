@@ -6,7 +6,7 @@ use crate::syntax::{
 use alloc::{string::String, vec::Vec};
 use hashbrown::HashMap;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Val {
 	I32(i32),
 	I64(i64),
@@ -67,7 +67,13 @@ pub trait Embedder: Default {
 	fn alloc_global(&mut self, s: &mut Store<Self>, global: &Global, val: &Val) -> Self::GlobalAddr;
 	fn set_elem(&mut self, s: &mut Store<Self>, table: Self::TableAddr, offset: usize, func: Self::FuncAddr);
 	fn set_data(&mut self, s: &mut Store<Self>, mem: Self::MemAddr, offset: i32, data: &[u8]);
-	fn invoke(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: Self::FuncAddr, args: Vec<Val>);
+	fn invoke(
+		&mut self,
+		s: &mut Store<Self>,
+		inst: &ModuleInst<Self>,
+		funcaddr: Self::FuncAddr,
+		args: Vec<Val>,
+	) -> Result<Vec<Val>, &'static str>;
 }
 
 pub struct Store<E: Embedder> {
@@ -81,8 +87,13 @@ impl<E: Embedder> Store<E> {
 		Self { funcs: vec![], tables: vec![], mems: vec![], globals: vec![] }
 	}
 
-	pub fn invoke(&mut self, inst: &ModuleInst<E>, funcaddr: E::FuncAddr, args: Vec<Val>) {
-		E::default().invoke(self, inst, funcaddr, args);
+	pub fn invoke(
+		&mut self,
+		inst: &ModuleInst<E>,
+		funcaddr: E::FuncAddr,
+		args: Vec<Val>,
+	) -> Result<Vec<Val>, &'static str> {
+		E::default().invoke(self, inst, funcaddr, args)
 	}
 }
 

@@ -82,6 +82,21 @@ fn validate_instr_seq(
 					stack.push(res);
 				}
 			},
+			Instr::If(res, expr, els) => {
+				let labels = match els.len() {
+					0 => once(ResultType(None)).chain(c.labels.iter().cloned()).collect(),
+					_ => once(res.clone()).chain(c.labels.iter().cloned()).collect(),
+				};
+				let cp = Context { labels, ..c.clone() };
+				let results = res.0.as_ref().map(|v| slice::from_ref(v)).unwrap_or(&[]);
+				validate_instr_seq(&cp, vec![], results, expr, false)?;
+				if els.len() > 0 {
+					validate_instr_seq(&cp, vec![], results, els, false)?;
+				}
+				if let Some(res) = res.0 {
+					stack.push(res);
+				}
+			},
 			Instr::Br(lbl) | Instr::BrIf(lbl) => {
 				let lbli = lbl.0 as usize;
 				if lbli >= c.labels.len() {
@@ -209,10 +224,16 @@ fn validate_instr_seq(
 			},
 			Instr::I32Load(memarg)
 			| Instr::I64Load(memarg)
+			| Instr::F32Load(memarg)
 			| Instr::I32Load8S(memarg)
 			| Instr::I32Load8U(memarg)
+			| Instr::I32Load16S(memarg)
 			| Instr::I32Load16U(memarg)
+			| Instr::I64Load8S(memarg)
 			| Instr::I64Load8U(memarg)
+			| Instr::I64Load16S(memarg)
+			| Instr::I64Load16U(memarg)
+			| Instr::I64Load32S(memarg)
 			| Instr::I64Load32U(memarg) => {
 				if c.mems.len() == 0 {
 					return Err("undefined mem");
@@ -220,10 +241,16 @@ fn validate_instr_seq(
 				let (bytewidth, typ) = match instr {
 					Instr::I32Load(_) => (4, ValType::I32),
 					Instr::I64Load(_) => (8, ValType::I64),
+					Instr::F32Load(_) => (8, ValType::F32),
 					Instr::I32Load8S(_) => (1, ValType::I32),
 					Instr::I32Load8U(_) => (1, ValType::I32),
+					Instr::I32Load16S(_) => (2, ValType::I32),
 					Instr::I32Load16U(_) => (2, ValType::I32),
+					Instr::I64Load8S(_) => (1, ValType::I64),
 					Instr::I64Load8U(_) => (1, ValType::I64),
+					Instr::I64Load16S(_) => (2, ValType::I64),
+					Instr::I64Load16U(_) => (2, ValType::I64),
+					Instr::I64Load32S(_) => (4, ValType::I64),
 					Instr::I64Load32U(_) => (4, ValType::I64),
 					_ => unreachable!(),
 				};
@@ -267,6 +294,7 @@ fn validate_instr_seq(
 			},
 			Instr::I32Const(_) => stack.push(ValType::I32),
 			Instr::I64Const(_) => stack.push(ValType::I64),
+			Instr::F32Const(_) => stack.push(ValType::F32),
 			Instr::I32Eqz => testop(&mut stack, ValType::I32)?,
 			Instr::I32Eq => relop(&mut stack, ValType::I32)?,
 			Instr::I32Ne => relop(&mut stack, ValType::I32)?,
@@ -285,10 +313,14 @@ fn validate_instr_seq(
 			Instr::I64GeU => relop(&mut stack, ValType::I64)?,
 			Instr::I32Clz => unop(&mut stack, ValType::I32)?,
 			Instr::I32Ctz => unop(&mut stack, ValType::I32)?,
+			Instr::I32PopCnt => unop(&mut stack, ValType::I32)?,
 			Instr::I32Add => relop(&mut stack, ValType::I32)?,
 			Instr::I32Sub => relop(&mut stack, ValType::I32)?,
 			Instr::I32Mul => relop(&mut stack, ValType::I32)?,
+			Instr::I32DivS => relop(&mut stack, ValType::I32)?,
 			Instr::I32DivU => relop(&mut stack, ValType::I32)?,
+			Instr::I32RemS => relop(&mut stack, ValType::I32)?,
+			Instr::I32RemU => relop(&mut stack, ValType::I32)?,
 			Instr::I32And => binop(&mut stack, ValType::I32)?,
 			Instr::I32Or => binop(&mut stack, ValType::I32)?,
 			Instr::I32Xor => binop(&mut stack, ValType::I32)?,
@@ -296,6 +328,7 @@ fn validate_instr_seq(
 			Instr::I32ShrS => binop(&mut stack, ValType::I32)?,
 			Instr::I32ShrU => binop(&mut stack, ValType::I32)?,
 			Instr::I32Rotl => binop(&mut stack, ValType::I32)?,
+			Instr::I32Rotr => binop(&mut stack, ValType::I32)?,
 			Instr::I64Add => binop(&mut stack, ValType::I64)?,
 			Instr::I64Sub => binop(&mut stack, ValType::I64)?,
 			Instr::I64Mul => binop(&mut stack, ValType::I64)?,
