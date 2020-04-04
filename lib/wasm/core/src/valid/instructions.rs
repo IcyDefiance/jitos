@@ -53,7 +53,6 @@ fn validate_instr_seq(
 	let mut i = 0;
 	while i < instrs.len() {
 		let instr = &instrs[i];
-		// debug!("{:?} {:?}", instr, stack);
 
 		if konst {
 			let is_const = match instr {
@@ -225,6 +224,7 @@ fn validate_instr_seq(
 			Instr::I32Load(memarg)
 			| Instr::I64Load(memarg)
 			| Instr::F32Load(memarg)
+			| Instr::F64Load(memarg)
 			| Instr::I32Load8S(memarg)
 			| Instr::I32Load8U(memarg)
 			| Instr::I32Load16S(memarg)
@@ -241,7 +241,8 @@ fn validate_instr_seq(
 				let (bytewidth, typ) = match instr {
 					Instr::I32Load(_) => (4, ValType::I32),
 					Instr::I64Load(_) => (8, ValType::I64),
-					Instr::F32Load(_) => (8, ValType::F32),
+					Instr::F32Load(_) => (4, ValType::F32),
+					Instr::F64Load(_) => (8, ValType::F64),
 					Instr::I32Load8S(_) => (1, ValType::I32),
 					Instr::I32Load8U(_) => (1, ValType::I32),
 					Instr::I32Load16S(_) => (2, ValType::I32),
@@ -262,16 +263,26 @@ fn validate_instr_seq(
 			},
 			Instr::I32Store(memarg)
 			| Instr::I64Store(memarg)
+			| Instr::F32Store(memarg)
+			| Instr::F64Store(memarg)
 			| Instr::I32Store8(memarg)
-			| Instr::I32Store16(memarg) => {
+			| Instr::I32Store16(memarg)
+			| Instr::I64Store8(memarg)
+			| Instr::I64Store16(memarg)
+			| Instr::I64Store32(memarg) => {
 				if c.mems.len() == 0 {
 					return Err("undefined mem");
 				}
 				let (bytewidth, typ) = match instr {
 					Instr::I32Store(_) => (4, ValType::I32),
 					Instr::I64Store(_) => (8, ValType::I64),
+					Instr::F32Store(_) => (4, ValType::F32),
+					Instr::F64Store(_) => (8, ValType::F64),
 					Instr::I32Store8(_) => (1, ValType::I32),
 					Instr::I32Store16(_) => (2, ValType::I32),
+					Instr::I64Store8(_) => (1, ValType::I64),
+					Instr::I64Store16(_) => (2, ValType::I64),
+					Instr::I64Store32(_) => (4, ValType::I64),
 					_ => unreachable!(),
 				};
 				if 2u32.pow(memarg.align) > bytewidth {
@@ -295,6 +306,7 @@ fn validate_instr_seq(
 			Instr::I32Const(_) => stack.push(ValType::I32),
 			Instr::I64Const(_) => stack.push(ValType::I64),
 			Instr::F32Const(_) => stack.push(ValType::F32),
+			Instr::F64Const(_) => stack.push(ValType::F64),
 			Instr::I32Eqz => testop(&mut stack, ValType::I32)?,
 			Instr::I32Eq => relop(&mut stack, ValType::I32)?,
 			Instr::I32Ne => relop(&mut stack, ValType::I32)?,

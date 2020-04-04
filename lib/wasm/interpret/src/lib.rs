@@ -9,7 +9,7 @@ extern crate log;
 mod wasi;
 
 use alloc::vec::Vec;
-use core::{iter::repeat, mem::transmute};
+use core::iter::repeat;
 use wasi::WASI;
 use wasm_core::{
 	exec::runtime::{Embedder, Frame, ModuleInst, Store, Val},
@@ -38,31 +38,33 @@ impl Interpreter {
 		self.labels.last_mut().unwrap()
 	}
 
+	fn stack(&mut self) -> &mut Vec<Val> {
+		self.stacks.last_mut().unwrap()
+	}
+
 	fn push_val(&mut self, val: Val) {
-		self.stacks.last_mut().unwrap().push(val);
+		self.stack().push(val);
 	}
 
 	fn pop_val(&mut self) -> Val {
-		self.stacks.last_mut().unwrap().pop().unwrap()
+		self.stack().pop().unwrap()
 	}
 
 	fn push_lbl(&mut self, arity: u32) {
 		self.labels.last_mut().unwrap().push(arity);
 		self.stacks.push(vec![]);
-		// debug!("push_lbl {}", self.labels().len());
 	}
 
 	fn pop_lbl(&mut self) -> u32 {
 		self.stacks.pop().unwrap();
 		let ret = self.labels.last_mut().unwrap().pop().unwrap();
-		// debug!("pop_lbl {}", self.labels().len());
 		ret
 	}
 
 	fn invoke_func(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: u32) -> Result<(), &'static str> {
 		match &s.funcs[funcaddr as usize] {
 			FuncInst::Func(func) => {
-				trace!("invoke_func {} : {:?}", funcaddr, self.stacks.last().unwrap());
+				// trace!("invoke_func {} : {:?}", funcaddr, self.stack());
 				let f = func.clone();
 				let typ = &inst.types[f.typ.0 as usize];
 				let locals = typ
@@ -79,9 +81,9 @@ impl Interpreter {
 				for res in results?.into_iter().rev() {
 					self.push_val(res);
 				}
-				trace!("ret ({} labels) : {:?}", self.labels().len(), self.stacks.last().unwrap());
+				// trace!("ret ({} labels) : {:?}", self.labels().len(), self.stack());
 			},
-			FuncInst::HostFunc(host_func) => unsafe { (host_func.func)(s, inst, self.stacks.last_mut().unwrap()) },
+			FuncInst::HostFunc(host_func) => unsafe { (host_func.func)(s, inst, self.stack()) },
 		}
 		Ok(())
 	}
@@ -93,7 +95,7 @@ impl Interpreter {
 		instrs: &[Instr],
 	) -> Result<Control, &'static str> {
 		for instr in instrs {
-			debug!("{:?} : {:?}", instr, self.stacks.last().unwrap());
+			// debug!("{:?} : {:?}", instr, self.stack());
 			let control = self.exec_instr(s, inst, instr)?;
 			match control {
 				Control::Continue => (),
@@ -117,9 +119,9 @@ impl Interpreter {
 				let control = self.exec(s, inst, instrs)?;
 				match control {
 					Control::Continue => {
-						let stack: Vec<_> = self.stacks.pop().unwrap();
+						let stack: Vec<_> = self.stacks.last().unwrap().clone();
 						self.pop_lbl();
-						self.stacks.last_mut().unwrap().extend(stack);
+						self.stack().extend(stack);
 					},
 					Control::Break(lbl) => {
 						if lbl > 0 {
@@ -136,8 +138,27 @@ impl Interpreter {
 					Control::Continue => {
 						let stack: Vec<_> = self.stacks.pop().unwrap();
 						self.pop_lbl();
-						self.stacks.last_mut().unwrap().extend(stack);
+						self.stack().extend(stack);
 						break;
+					},
+					Control::Break(lbl) => {
+						if lbl > 0 {
+							return Ok(Control::Break(lbl - 1));
+						}
+					},
+					Control::Return => return Ok(Control::Return),
+				}
+			},
+			Instr::If(res, instrs, els) => {
+				let c = self.pop_val().as_i32();
+				self.push_lbl(res.0.is_some() as u32);
+				// panic!("{} {:?} {:?}", c, instrs, els);
+				let control = self.exec(s, inst, if c != 0 { instrs } else { els })?;
+				match control {
+					Control::Continue => {
+						let stack: Vec<_> = self.stacks.last().unwrap().clone();
+						self.pop_lbl();
+						self.stack().extend(stack);
 					},
 					Control::Break(lbl) => {
 						if lbl > 0 {
@@ -157,7 +178,6 @@ impl Interpreter {
 				for val in vals.into_iter().rev() {
 					self.push_val(val);
 				}
-				// debug!("br {} ({})", l.0, self.labels().len());
 				return Ok(Control::Break(l.0));
 			},
 			Instr::BrIf(l) => {
@@ -207,21 +227,28 @@ impl Interpreter {
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 4];
 				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
-				self.push_val(Val::I32(unsafe { transmute(bs) }));
+				self.push_val(Val::I32(i32::from_le_bytes(bs)));
 			},
 			Instr::I64Load(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 8];
 				bs.copy_from_slice(mem.get(ea..ea + 8).ok_or("out of bounds memory access")?);
-				self.push_val(Val::I64(unsafe { transmute(bs) }));
+				self.push_val(Val::I64(i64::from_le_bytes(bs)));
 			},
 			Instr::F32Load(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 4];
 				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
-				self.push_val(Val::F32(unsafe { transmute(bs) }));
+				self.push_val(Val::F32(f32::from_le_bytes(bs)));
+			},
+			Instr::F64Load(m) => {
+				let mem = &s.mems[inst.memaddrs[0] as usize].0;
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				let mut bs = [0; 8];
+				bs.copy_from_slice(mem.get(ea..ea + 8).ok_or("out of bounds memory access")?);
+				self.push_val(Val::F64(f64::from_le_bytes(bs)));
 			},
 			Instr::I32Load8S(m) | Instr::I32Load8U(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
@@ -234,7 +261,7 @@ impl Interpreter {
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 2];
 				bs.copy_from_slice(mem.get(ea..ea + 2).ok_or("out of bounds memory access")?);
-				self.push_val(Val::I32(unsafe { transmute::<_, u16>(bs) } as _));
+				self.push_val(Val::I32(u16::from_le_bytes(bs) as _));
 			},
 			Instr::I64Load8S(m) | Instr::I64Load8U(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
@@ -247,24 +274,36 @@ impl Interpreter {
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 2];
 				bs.copy_from_slice(mem.get(ea..ea + 2).ok_or("out of bounds memory access")?);
-				self.push_val(Val::I64(unsafe { transmute::<_, u16>(bs) } as _));
+				self.push_val(Val::I64(u16::from_le_bytes(bs) as _));
 			},
 			Instr::I64Load32S(m) | Instr::I64Load32U(m) => {
 				let mem = &s.mems[inst.memaddrs[0] as usize].0;
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				let mut bs = [0; 4];
 				bs.copy_from_slice(mem.get(ea..ea + 4).ok_or("out of bounds memory access")?);
-				self.push_val(Val::I64(unsafe { transmute::<_, u32>(bs) } as _));
+				self.push_val(Val::I64(u32::from_le_bytes(bs) as _));
 			},
 			Instr::I32Store(m) => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
-				let c: [u8; 4] = unsafe { transmute(self.pop_val().as_i32()) };
+				let c = self.pop_val().as_i32().to_le_bytes();
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea..ea + 4].copy_from_slice(&c);
 			},
 			Instr::I64Store(m) => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
-				let c: [u8; 8] = unsafe { transmute(self.pop_val().as_i64()) };
+				let c = self.pop_val().as_i64().to_le_bytes();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem.get_mut(ea..ea + 8).ok_or("out of bounds memory access")?.copy_from_slice(&c);
+			},
+			Instr::F32Store(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = self.pop_val().as_f32().to_le_bytes();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem[ea..ea + 4].copy_from_slice(&c);
+			},
+			Instr::F64Store(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = self.pop_val().as_f64().to_le_bytes();
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea..ea + 8].copy_from_slice(&c);
 			},
@@ -274,7 +313,30 @@ impl Interpreter {
 				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
 				mem[ea] = c as _;
 			},
-			// Instr::I32Store16(MemArg),
+			Instr::I32Store16(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = (self.pop_val().as_i32() as i16).to_le_bytes();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem[ea..ea + 2].copy_from_slice(&c);
+			},
+			Instr::I64Store8(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = self.pop_val().as_i64();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem[ea] = c as _;
+			},
+			Instr::I64Store16(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = (self.pop_val().as_i64() as i16).to_le_bytes();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem[ea..ea + 2].copy_from_slice(&c);
+			},
+			Instr::I64Store32(m) => {
+				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
+				let c = (self.pop_val().as_i64() as i32).to_le_bytes();
+				let ea = self.pop_val().as_i32() as usize + m.offset as usize;
+				mem[ea..ea + 4].copy_from_slice(&c);
+			},
 			Instr::MemorySize => self.push_val(Val::I32((s.mems[inst.memaddrs[0] as usize].0.len() / PAGE_SIZE) as _)),
 			Instr::MemoryGrow => {
 				let mem = &mut s.mems[inst.memaddrs[0] as usize].0;
@@ -285,6 +347,8 @@ impl Interpreter {
 			},
 			Instr::I32Const(n) => self.push_val(Val::I32(*n)),
 			Instr::I64Const(n) => self.push_val(Val::I64(*n)),
+			Instr::F32Const(n) => self.push_val(Val::F32(*n)),
+			Instr::F64Const(n) => self.push_val(Val::F64(*n)),
 			Instr::I32Eqz => {
 				let lhs = self.pop_val().as_i32() as u32;
 				self.push_val(Val::I32((lhs == 0) as i32));
@@ -466,7 +530,9 @@ impl Embedder for Interpreter {
 
 	fn init(&mut self, s: &mut Store<Self>, inst: &mut ModuleInst<Self>, imports: &[Import]) {
 		for import in imports {
-			if import.module != "wasi_snapshot_preview1" {
+			if import.module == "spectest" {
+				continue;
+			} else if import.module != "wasi_snapshot_preview1" {
 				panic!("unknown module {}", import.module);
 			}
 			match &import.desc {
@@ -503,6 +569,7 @@ impl Embedder for Interpreter {
 		for instr in &expr.instrs {
 			match instr {
 				&Instr::I32Const(n) => stack.push(Val::I32(n)),
+				&Instr::I64Const(n) => stack.push(Val::I64(n)),
 				_ => unimplemented!("{:?}", instr),
 			}
 		}
@@ -558,10 +625,10 @@ impl Embedder for Interpreter {
 		}
 
 		self.push_frame(Frame::new(vec![]));
-		for arg in args {
+		for arg in args.into_iter().rev() {
 			self.push_val(arg);
 		}
-		let ret = self.invoke_func(s, inst, funcaddr).map(|_| self.stacks.last_mut().unwrap().drain(..).collect());
+		let ret = self.invoke_func(s, inst, funcaddr).map(|_| self.stack().drain(..).collect());
 		self.pop_frame();
 		ret
 	}

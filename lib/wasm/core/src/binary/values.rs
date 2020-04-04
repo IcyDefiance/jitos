@@ -12,7 +12,7 @@ pub fn u32(mut i: &[u8]) -> IResult<&[u8], u32> {
 	let mut result = 0;
 	let mut shift = 0;
 	for idx in 0.. {
-		let (rem, byte) = verify(le_u8, |_| idx < 5 /* (32.0 / 7.0).ceil() */)(i)?;
+		let (rem, byte) = verify(le_u8, |b| idx < 4 || *b <= 0xF)(i)?;
 		i = rem;
 		let byte = byte as u32;
 		result |= (byte & 0x7F) << shift;
@@ -28,7 +28,7 @@ pub fn i32(mut i: &[u8]) -> IResult<&[u8], i32> {
 	let mut result = 0;
 	let mut shift = 0;
 	for idx in 0.. {
-		let (rem, byte) = verify(le_u8, |_| idx < 5 /* (32.0 / 7.0).ceil() */)(i)?;
+		let (rem, byte) = verify(le_u8, |b| idx < 4 || (idx == 4 && valid_signed_end(*b, 4)))(i)?;
 		i = rem;
 		let byte = byte as i32;
 
@@ -48,7 +48,7 @@ pub fn i64(mut i: &[u8]) -> IResult<&[u8], i64> {
 	let mut result = 0;
 	let mut shift = 0;
 	for idx in 0.. {
-		let (rem, byte) = verify(le_u8, |_| idx < 10 /* (64.0 / 7.0).ceil() */)(i)?;
+		let (rem, byte) = verify(le_u8, |b| idx < 9 || (idx == 9 && valid_signed_end(*b, 1)))(i)?;
 		i = rem;
 		let byte = byte as i64;
 
@@ -62,6 +62,11 @@ pub fn i64(mut i: &[u8]) -> IResult<&[u8], i64> {
 		}
 	}
 	Ok((i, result))
+}
+
+fn valid_signed_end(b: u8, used_bits: i8) -> bool {
+	let sign_and_unused = (b << 1) as i8 >> used_bits;
+	sign_and_unused == 0 || sign_and_unused == -1
 }
 
 pub fn name(i: &[u8]) -> IResult<&[u8], &str> {

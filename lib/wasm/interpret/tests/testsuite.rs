@@ -14,7 +14,9 @@ use wasm_core::{
 use wasm_interpret::Interpreter;
 
 #[test]
-fn i32() {
+fn testsuite() {
+	simple_logger::init().unwrap();
+
 	set_current_dir("../../..").unwrap();
 	create_dir_all("build/wasm/testsuite").unwrap();
 
@@ -62,25 +64,22 @@ fn run_wast(path: PathBuf) {
 						let results = invoke(store.as_mut().unwrap(), inst.as_ref().unwrap(), action).unwrap();
 						for (i, expect) in cmd.expected.unwrap().into_iter().enumerate() {
 							let value = expect.value.unwrap();
-							let (val, eq) = match &*expect.typ {
-								"i32" => {
-									let val = Val::I32(value.parse::<u32>().unwrap() as _);
-									(val, val == results[i])
-								},
-								"i64" => {
-									let val = Val::I64(value.parse::<u64>().unwrap() as _);
-									(val, val == results[i])
-								},
-								"f32" => {
-									let val = Val::F32(value.parse().unwrap());
-									(val, val == results[i])
-								},
+							let val = value.parse::<u64>().unwrap();
+							match &*expect.typ {
+								"i32" => assert!(results[i].is_i32()),
+								"i64" => assert!(results[i].is_i64()),
+								"f32" => assert!(results[i].is_f32()),
+								"f64" => assert!(results[i].is_f64()),
 								_ => unimplemented!("{}", expect.typ),
 							};
-							assert!(
-								eq,
+							assert_eq!(
+								results[i].to_bits(),
+								val,
 								"failed test at {}:{} (expected {:?} == {:?})",
-								tests.source_filename, cmd.line, val, results[i]
+								tests.source_filename,
+								cmd.line,
+								val,
+								results[i].to_bits()
 							);
 						}
 					},
@@ -108,6 +107,13 @@ fn run_wast(path: PathBuf) {
 					.validate()
 					.expect_err(&format!("failed test at {}:{} (expected invalid)", tests.source_filename, cmd.line));
 			},
+			"assert_malformed" => {
+				let mut wasm = vec![];
+				let mut file = File::open(format!("{}/{}", build_dir, cmd.filename.unwrap())).unwrap();
+				file.read_to_end(&mut wasm).unwrap();
+				Module::decode(&wasm)
+					.expect_err(&format!("failed test at {}:{} (expected malformed)", tests.source_filename, cmd.line));
+			},
 			_ => unimplemented!("{}", cmd.typ),
 		}
 	}
@@ -125,6 +131,7 @@ fn invoke(
 		let value = arg.value.unwrap();
 		args.push(match &*arg.typ {
 			"i32" => Val::I32(value.parse::<u32>().unwrap() as _),
+			"i64" => Val::I64(value.parse::<u64>().unwrap() as _),
 			_ => unimplemented!("{}", arg.typ),
 		});
 	}

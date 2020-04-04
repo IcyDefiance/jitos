@@ -23,6 +23,34 @@ impl Val {
 		}
 	}
 
+	pub fn is_i32(self) -> bool {
+		match self {
+			Val::I32(_) => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_i64(self) -> bool {
+		match self {
+			Val::I64(_) => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_f32(self) -> bool {
+		match self {
+			Val::F32(_) => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_f64(self) -> bool {
+		match self {
+			Val::F64(_) => true,
+			_ => false,
+		}
+	}
+
 	pub fn as_i32(self) -> i32 {
 		match self {
 			Val::I32(x) => x,
@@ -34,6 +62,29 @@ impl Val {
 		match self {
 			Val::I64(x) => x,
 			_ => panic!("not an i64"),
+		}
+	}
+
+	pub fn as_f32(self) -> f32 {
+		match self {
+			Val::F32(x) => x,
+			_ => panic!("not an f32"),
+		}
+	}
+
+	pub fn as_f64(self) -> f64 {
+		match self {
+			Val::F64(x) => x,
+			_ => panic!("not an f64"),
+		}
+	}
+
+	pub fn to_bits(self) -> u64 {
+		match self {
+			Val::I32(x) => x as _,
+			Val::I64(x) => x as _,
+			Val::F32(x) => x.to_bits() as _,
+			Val::F64(x) => x.to_bits(),
 		}
 	}
 

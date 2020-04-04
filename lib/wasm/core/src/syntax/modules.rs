@@ -91,14 +91,11 @@ impl<'a> Module<'a> {
 	}
 
 	pub fn decode(bytes: &'a [u8]) -> Result<Self, Err<(&[u8], ErrorKind)>> {
-		info!("decoding...");
 		let ret = decode(bytes);
-		info!("done decoding");
 		ret
 	}
 
 	pub fn validate(&mut self) -> Result<(), &'static str> {
-		info!("validating...");
 		let ret = if let Some(valid) = self.valid {
 			valid
 		} else {
@@ -106,7 +103,6 @@ impl<'a> Module<'a> {
 			self.valid = Some(res);
 			res
 		};
-		info!("done validating");
 		ret
 	}
 
@@ -115,9 +111,7 @@ impl<'a> Module<'a> {
 		store: &mut Store<E>,
 		externs: &[ExternVal<E>],
 	) -> Result<ModuleInst<E>, &'static str> {
-		info!("instantiating...");
 		let ret = instantiate(store, self, externs);
-		info!("done instantiating");
 		ret
 	}
 }

@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use core::iter::repeat;
 use nom::{
 	bytes::complete::{tag, take},
-	combinator::{complete, map, opt, rest},
+	combinator::{all_consuming, complete, map, opt, rest},
 	error::{make_error, ErrorKind},
 	multi::many0,
 	number::complete::le_u8,
@@ -60,7 +60,7 @@ fn section<'a, B>(
 		let (i, _) = tag(&[id])(i)?;
 		let (i, size) = u32(i)?;
 		let (i, data) = take(size)(i)?;
-		let (_, content) = complete(|i| content(i))(data)?;
+		let (_, content) = all_consuming(&content)(data)?;
 		Ok((i, content))
 	}
 }

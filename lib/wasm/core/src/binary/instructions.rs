@@ -10,7 +10,7 @@ use nom::{
 	branch::alt,
 	bytes::complete::tag,
 	multi::many_till,
-	number::complete::{le_f32, le_u8},
+	number::complete::{le_f32, le_f64, le_u8},
 	IResult,
 };
 
@@ -83,12 +83,13 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 			(i, instr)
 		},
 		// *** MEMORY ***
-		0x28..=0x29 | 0x2A | 0x2C..=0x37 | 0x3A..=0x3B => {
+		0x28..=0x29 | 0x2A..=0x39 | 0x3A..=0x3E => {
 			let (i, m) = memarg(i)?;
 			let instr = match opcode {
 				0x28 => Instr::I32Load(m),
 				0x29 => Instr::I64Load(m),
 				0x2A => Instr::F32Load(m),
+				0x2B => Instr::F64Load(m),
 				0x2C => Instr::I32Load8S(m),
 				0x2D => Instr::I32Load8U(m),
 				0x2E => Instr::I32Load16S(m),
@@ -101,8 +102,13 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 				0x35 => Instr::I64Load32U(m),
 				0x36 => Instr::I32Store(m),
 				0x37 => Instr::I64Store(m),
+				0x38 => Instr::F32Store(m),
+				0x39 => Instr::F64Store(m),
 				0x3A => Instr::I32Store8(m),
 				0x3B => Instr::I32Store16(m),
+				0x3C => Instr::I64Store8(m),
+				0x3D => Instr::I64Store16(m),
+				0x3E => Instr::I64Store32(m),
 				_ => unreachable!(),
 			};
 			(i, instr)
@@ -127,6 +133,10 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 		0x43 => {
 			let (i, n) = le_f32(i)?;
 			(i, Instr::F32Const(n))
+		},
+		0x44 => {
+			let (i, n) = le_f64(i)?;
+			(i, Instr::F64Const(n))
 		},
 		0x45 => (i, Instr::I32Eqz),
 		0x46 => (i, Instr::I32Eq),
