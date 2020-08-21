@@ -18,6 +18,7 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 	let (i, opcode) = le_u8(i)?;
 	let ret = match opcode {
 		0x00 => (i, Instr::Unreachable),
+		0x01 => (i, Instr::Nop),
 		// *** CONTROL ***
 		0x02..=0x04 => {
 			let (i, resulttype) = blocktype(i)?;
@@ -154,6 +155,7 @@ fn instr(i: &[u8]) -> IResult<&[u8], Instr> {
 		0x52 => (i, Instr::I64Ne),
 		0x56 => (i, Instr::I64GtU),
 		0x5A => (i, Instr::I64GeU),
+		0x5E => (i, Instr::F32Gt),
 		0x67 => (i, Instr::I32Clz),
 		0x68 => (i, Instr::I32Ctz),
 		0x69 => (i, Instr::I32PopCnt),

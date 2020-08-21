@@ -1,12 +1,15 @@
 use crate::{
-	binary::{decode, modules::Custom},
+	binary::{
+		decode,
+		modules::{Custom, Local},
+	},
 	exec::{
 		modules::instantiate,
 		runtime::{Embedder, ExternVal, ModuleInst, Store},
 	},
 	syntax::{
 		instructions::Expr,
-		types::{FuncType, GlobalType, MemType, TableType, ValType},
+		types::{FuncType, GlobalType, MemType, TableType},
 	},
 	valid::modules::validate_module,
 };
@@ -147,7 +150,7 @@ pub struct LabelIdx(pub u32);
 #[derive(Clone, Debug)]
 pub struct Func {
 	pub typ: TypeIdx,
-	pub locals: Vec<ValType>,
+	pub locals: Vec<Local>,
 	pub body: Expr,
 }
 

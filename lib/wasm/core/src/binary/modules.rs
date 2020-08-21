@@ -14,10 +14,9 @@ use crate::{
 	},
 };
 use alloc::vec::Vec;
-use core::iter::repeat;
 use nom::{
 	bytes::complete::{tag, take},
-	combinator::{all_consuming, complete, map, opt, rest},
+	combinator::{all_consuming, complete, map, opt, rest, verify},
 	error::{make_error, ErrorKind},
 	multi::many0,
 	number::complete::le_u8,
@@ -223,30 +222,36 @@ fn elem(i: &[u8]) -> IResult<&[u8], Elem> {
 	Ok((i, Elem { table, offset, init }))
 }
 
-fn codesec(i: &[u8]) -> IResult<&[u8], Vec<(Vec<ValType>, Expr)>> {
+fn codesec(i: &[u8]) -> IResult<&[u8], Vec<(Vec<Local>, Expr)>> {
 	let (i, codes) = opt(section(10, vec(code)))(i)?;
 	let codes = codes.unwrap_or(vec![]);
 	Ok((i, codes))
 }
 
-fn code(i: &[u8]) -> IResult<&[u8], (Vec<ValType>, Expr)> {
+fn code(i: &[u8]) -> IResult<&[u8], (Vec<Local>, Expr)> {
 	let (i, size) = u32(i)?;
 	let (i, data) = take(size)(i)?;
 	let (_, code) = complete(func)(data)?;
 	Ok((i, code))
 }
 
-fn func(i: &[u8]) -> IResult<&[u8], (Vec<ValType>, Expr)> {
-	let (i, locals) = vec(locals)(i)?;
-	let locals = locals.into_iter().flatten().collect();
+fn func(i: &[u8]) -> IResult<&[u8], (Vec<Local>, Expr)> {
+	let (i, locals) =
+		verify(vec(locals), |ls: &Vec<_>| ls.iter().map(|l| l.count as usize).sum::<usize>() <= u32::MAX as _)(i)?;
 	let (i, body) = expr(i)?;
 	Ok((i, (locals, body)))
 }
 
-fn locals(i: &[u8]) -> IResult<&[u8], impl Iterator<Item = ValType>> {
-	let (i, len) = u32(i)?;
+fn locals(i: &[u8]) -> IResult<&[u8], Local> {
+	let (i, count) = u32(i)?;
 	let (i, typ) = valtype(i)?;
-	Ok((i, repeat(typ).take(len as _)))
+	Ok((i, Local { count, typ }))
+}
+
+#[derive(Clone, Debug)]
+pub struct Local {
+	pub count: u32,
+	pub typ: ValType,
 }
 
 fn datasec(i: &[u8]) -> IResult<&[u8], Vec<Data>> {
@@ -291,7 +296,7 @@ pub fn module(i: &[u8]) -> IResult<&[u8], Module> {
 	let (i, _) = append_customs(i)?;
 	let (i, elem) = elemsec(i)?;
 	let (i, _) = append_customs(i)?;
-	let (i, codes) = codesec(i)?;
+	let (i, codes) = verify(codesec, |c: &Vec<_>| c.len() == funcs.len())(i)?;
 	let (i, _) = append_customs(i)?;
 	let (i, data) = datasec(i)?;
 	let (i, _) = append_customs(i)?;

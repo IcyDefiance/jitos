@@ -9,6 +9,7 @@ use crate::{
 		Context,
 	},
 };
+use core::iter::repeat;
 use hashbrown::HashSet;
 
 fn validate_func(c: &Context, func: &Func) -> Result<(), &'static str> {
@@ -19,7 +20,12 @@ fn validate_func(c: &Context, func: &Func) -> Result<(), &'static str> {
 
 	let functype = &c.types[typ];
 	let cp = Context {
-		locals: [&functype.params[..], &func.locals[..]].concat(),
+		locals: functype
+			.params
+			.iter()
+			.cloned()
+			.chain(func.locals.iter().map(|l| repeat(l.typ).take(l.count as _)).flatten())
+			.collect(),
 		labels: vec![ResultType(functype.results.get(0).cloned())],
 		retur: Some(ResultType(functype.results.get(0).cloned())),
 		..c.clone()

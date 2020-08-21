@@ -64,6 +64,7 @@ impl Interpreter {
 	fn invoke_func(&mut self, s: &mut Store<Self>, inst: &ModuleInst<Self>, funcaddr: u32) -> Result<(), &'static str> {
 		match &s.funcs[funcaddr as usize] {
 			FuncInst::Func(func) => {
+				debug!("stacks: {}", self.stacks.len());
 				// trace!("invoke_func {} : {:?}", funcaddr, self.stack());
 				let f = func.clone();
 				let typ = &inst.types[f.typ.0 as usize];
@@ -71,7 +72,13 @@ impl Interpreter {
 					.params
 					.iter()
 					.map(|_| self.pop_val())
-					.chain(f.locals.iter().map(|typ| Val::from_type(*typ)))
+					.chain(
+						func.locals
+							.iter()
+							.map(|l| repeat(l.typ).take(l.count as _))
+							.flatten()
+							.map(|typ| Val::from_type(typ)),
+					)
 					.collect();
 				self.push_frame(Frame::new(locals));
 				self.push_lbl(typ.results.len() as _);
@@ -95,7 +102,7 @@ impl Interpreter {
 		instrs: &[Instr],
 	) -> Result<Control, &'static str> {
 		for instr in instrs {
-			// debug!("{:?} : {:?}", instr, self.stack());
+			debug!("{:?} : {:?}", instr, self.stack());
 			let control = self.exec_instr(s, inst, instr)?;
 			match control {
 				Control::Continue => (),
@@ -114,6 +121,7 @@ impl Interpreter {
 	) -> Result<Control, &'static str> {
 		match instr {
 			Instr::Unreachable => panic!("unreachable instruction reached"),
+			Instr::Nop => (),
 			Instr::Block(res, instrs) => {
 				self.push_lbl(res.0.is_some() as u32);
 				let control = self.exec(s, inst, instrs)?;
@@ -136,7 +144,7 @@ impl Interpreter {
 				let control = self.exec(s, inst, instrs)?;
 				match control {
 					Control::Continue => {
-						let stack: Vec<_> = self.stacks.pop().unwrap();
+						let stack: Vec<_> = self.stacks.last().unwrap().clone();
 						self.pop_lbl();
 						self.stack().extend(stack);
 						break;

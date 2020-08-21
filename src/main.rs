@@ -31,7 +31,7 @@ fn kernel_main(_boot_info: &'static BootInfo) -> ! {
 	let mut store = Store::<Interpreter>::init();
 	let inst = module.instantiate(&mut store, &[]).unwrap();
 	let main = inst.exports.get("_start").unwrap().as_func();
-	store.invoke(&inst, main, vec![]);
+	store.invoke(&inst, main, vec![]).unwrap();
 
 	#[cfg(test)]
 	test_main();

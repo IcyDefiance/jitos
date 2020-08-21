@@ -68,6 +68,7 @@ fn validate_instr_seq(
 
 		match instr {
 			Instr::Unreachable => return Ok(()),
+			Instr::Nop => return Ok(()),
 			Instr::Block(res, expr) | Instr::Loop(res, expr) => {
 				let labels = match instr {
 					Instr::Block(..) => once(res.clone()).chain(c.labels.iter().cloned()).collect(),
@@ -323,6 +324,7 @@ fn validate_instr_seq(
 			Instr::I64Ne => relop(&mut stack, ValType::I64)?,
 			Instr::I64GtU => relop(&mut stack, ValType::I64)?,
 			Instr::I64GeU => relop(&mut stack, ValType::I64)?,
+			Instr::F32Gt => relop(&mut stack, ValType::F32)?,
 			Instr::I32Clz => unop(&mut stack, ValType::I32)?,
 			Instr::I32Ctz => unop(&mut stack, ValType::I32)?,
 			Instr::I32PopCnt => unop(&mut stack, ValType::I32)?,

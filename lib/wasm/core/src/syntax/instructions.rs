@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 #[derive(Clone, Debug)]
 pub enum Instr {
 	Unreachable,
+	Nop,
 	Block(ResultType, Vec<Instr>),
 	Loop(ResultType, Vec<Instr>),
 	If(ResultType, Vec<Instr>, Vec<Instr>),
@@ -68,6 +69,7 @@ pub enum Instr {
 	I64Ne,
 	I64GtU,
 	I64GeU,
+	F32Gt,
 	I32Clz,
 	I32Ctz,
 	I32PopCnt,
